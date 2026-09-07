@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+}
+
+@keyframes pulse-selected {
+  0%, 100% {
+    box-shadow: 0 0 0 3px #ef4444, 0 0 12px rgba(239, 68, 68, 0.85);
+    border-color: #ffffff;
+    transform: scale(1.04);
+  }
+  50% {
+    box-shadow: 0 0 0 1px #ef4444, 0 0 4px rgba(239, 68, 68, 0.4);
+    border-color: #ef4444;
+    transform: scale(1.0);
+  }
+}
+
+.table-selected-blink {
+  animation: pulse-selected 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  z-index: 20;
+}
+
+/* Custom scrollbars for floorplan horizontal/vertical scrolling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.6);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.5);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.8);
+}
+
