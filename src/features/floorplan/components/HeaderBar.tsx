@@ -2,7 +2,7 @@
 import React from 'react';
 import { STATUS_COLORS } from '../../../config/constants';
 import { TableItem, TableStatusClass } from '../../../types';
-import { RefreshCw, Database, UtensilsCrossed, LayoutGrid, Calendar } from 'lucide-react';
+import { RefreshCw, Database, UtensilsCrossed, LayoutGrid, Calendar, Lock } from 'lucide-react';
 
 interface HeaderBarProps {
   tables: TableItem[];
@@ -14,6 +14,7 @@ interface HeaderBarProps {
   bookingCount: number;
   selectedDate: string;
   onChangeDate: (date: string) => void;
+  isGasUnlocked?: boolean;
 }
 
 export const HeaderBar: React.FC<HeaderBarProps> = ({
@@ -26,6 +27,7 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
   bookingCount,
   selectedDate,
   onChangeDate,
+  isGasUnlocked = false,
 }) => {
   // Calculate status counts
   const counts = React.useMemo(() => {
@@ -104,10 +106,14 @@ export const HeaderBar: React.FC<HeaderBarProps> = ({
                   ? 'bg-amber-500 text-slate-950 font-bold shadow'
                   : 'text-slate-400 hover:text-white'
               }`}
-              title="Cấu hình Google Sheets / GAS"
+              title={isGasUnlocked ? 'Cấu hình Google Sheets / GAS' : 'Cấu hình Google Sheets / GAS (Yêu cầu mật khẩu)'}
             >
-              <Database className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Sheet / GAS</span>
+              {isGasUnlocked ? (
+                <Database className="w-3.5 h-3.5" />
+              ) : (
+                <Lock className="w-3.5 h-3.5 text-amber-400" />
+              )}
+              <span className="text-[11px] sm:text-xs">Sheet/GAS</span>
             </button>
 
             <button

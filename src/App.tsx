@@ -19,6 +19,7 @@ import { KitchenSlipModal } from './features/floorplan/components/KitchenSlipMod
 import { BookingListView } from './features/menu/BookingListView';
 import { MenuDetailView } from './features/menu/MenuDetailView';
 import { SettingsView } from './features/settings/SettingsView';
+import { GasAuthModal } from './features/settings/components/GasAuthModal';
 import { ToastContainer } from './components/ui/ToastContainer';
 
 export default function App() {
@@ -26,6 +27,16 @@ export default function App() {
 
   // Navigation view
   const [currentView, setCurrentView] = useState<'floorplan' | 'bookings' | 'settings'>('floorplan');
+
+  // Authentication for Sheet / GAS Tab (mật khẩu: smo_vungmanh)
+  const [isGasUnlocked, setIsGasUnlocked] = useState<boolean>(() => {
+    try {
+      return sessionStorage.getItem('smo_gas_unlocked') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [isGasAuthModalOpen, setIsGasAuthModalOpen] = useState(false);
 
   // Selected date filter (default to today)
   const [selectedDate, setSelectedDate] = useState<string>(() => {
@@ -683,6 +694,42 @@ export default function App() {
     loadBookings();
   };
 
+  // Handle view navigation with password protection for Sheet / GAS tab (smo_vungmanh)
+  const handleNavigateView = (v: 'floorplan' | 'bookings' | 'settings') => {
+    if (v === 'settings') {
+      if (isGasUnlocked) {
+        setCurrentView('settings');
+      } else {
+        setIsGasAuthModalOpen(true);
+      }
+      return;
+    }
+
+    setCurrentView(v);
+    if (v === 'floorplan') setActiveBookingForMenu(null);
+  };
+
+  const handleGasAuthSuccess = () => {
+    setIsGasUnlocked(true);
+    try {
+      sessionStorage.setItem('smo_gas_unlocked', 'true');
+    } catch {}
+    setIsGasAuthModalOpen(false);
+    setCurrentView('settings');
+    triggerNotificationHaptic('success');
+    showToast('Xác thực thành công', 'Đã mở khóa truy cập Tab Sheet / GAS', 'success');
+  };
+
+  const handleLockGasTab = () => {
+    setIsGasUnlocked(false);
+    try {
+      sessionStorage.removeItem('smo_gas_unlocked');
+    } catch {}
+    setCurrentView('floorplan');
+    triggerHaptic();
+    showToast('Đã khóa Tab', 'Đã khóa quyền truy cập Tab Sheet / GAS', 'info');
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-amber-500 selection:text-black">
       {/* Toast Alert Notifications */}
@@ -695,16 +742,14 @@ export default function App() {
         isLoading={isLoading}
         onRefresh={handleRefreshAll}
         currentView={currentView}
-        onChangeView={(v) => {
-          setCurrentView(v);
-          if (v === 'floorplan') setActiveBookingForMenu(null);
-        }}
+        onChangeView={handleNavigateView}
         bookingCount={bookings.filter((b) => b.trang_thai !== 'HỦY').length}
         selectedDate={selectedDate}
         onChangeDate={(d) => {
           setSelectedDate(d);
           showToast('Đổi ngày xem', `Đang xem sơ đồ ngày ${d}`, 'info');
         }}
+        isGasUnlocked={isGasUnlocked}
       />
 
       {/* Action Toolbar - Shown when in Floorplan view */}
@@ -753,8 +798,12 @@ export default function App() {
           />
         )}
 
-        {currentView === 'settings' && (
-          <SettingsView onShowToast={showToast} onRefreshAll={handleRefreshAll} />
+        {currentView === 'settings' && isGasUnlocked && (
+          <SettingsView
+            onShowToast={showToast}
+            onRefreshAll={handleRefreshAll}
+            onLock={handleLockGasTab}
+          />
         )}
       </main>
 
@@ -863,6 +912,13 @@ export default function App() {
             orderItems: [],
           })
         }
+      />
+
+      {/* 7. Modal Yêu Cầu Mật Khẩu Tab Sheet / GAS (smo_vungmanh) */}
+      <GasAuthModal
+        isOpen={isGasAuthModalOpen}
+        onClose={() => setIsGasAuthModalOpen(false)}
+        onSuccess={handleGasAuthSuccess}
       />
     </div>
   );

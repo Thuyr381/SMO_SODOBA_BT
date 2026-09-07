@@ -1,15 +1,16 @@
 // src/features/settings/SettingsView.tsx
 import React, { useState } from 'react';
 import { gasApi } from '../../services/gasApi';
-import { Database, Link, CheckCircle2, RotateCcw, Play, FileSpreadsheet, ShieldCheck, HelpCircle, Activity, AlertTriangle, Copy, Code } from 'lucide-react';
+import { Database, Link, CheckCircle2, RotateCcw, Play, FileSpreadsheet, ShieldCheck, HelpCircle, Activity, AlertTriangle, Copy, Code, Lock } from 'lucide-react';
 import { TableStatusClass, BookingPayload, OrderMenuItem } from '../../types';
 
 interface SettingsViewProps {
   onShowToast: (title: string, message: string, type?: 'success' | 'error' | 'warning' | 'info') => void;
   onRefreshAll: () => void;
+  onLock?: () => void;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onRefreshAll }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onRefreshAll, onLock }) => {
   const [gasUrl, setGasUrl] = useState(gasApi.getApiUrl());
   const [isTesting, setIsTesting] = useState(false);
   const [testLog, setTestLog] = useState<string>('');
@@ -86,16 +87,30 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onRefre
     <div id="settings-view" className="w-full flex flex-col gap-5 max-w-4xl mx-auto">
       {/* GAS URL Config Card */}
       <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-md flex flex-col gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center font-bold">
-            <Link className="w-5 h-5" />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center justify-center font-bold shrink-0">
+              <Link className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-white">KẾT NỐI GOOGLE APPS SCRIPT WEB APP</h3>
+              <p className="text-xs text-slate-400">
+                API Router Gateway kết nối trực tiếp với các Sheet: CONFIG_BAN, MENU_MON, DATBAN, DATMON
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="text-base font-bold text-white">KẾT NỐI GOOGLE APPS SCRIPT WEB APP</h3>
-            <p className="text-xs text-slate-400">
-              API Router Gateway kết nối trực tiếp với các Sheet: CONFIG_BAN, MENU_MON, DATBAN, DATMON
-            </p>
-          </div>
+          {onLock && (
+            <button
+              type="button"
+              id="btn-lock-settings-tab"
+              onClick={onLock}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-300 hover:text-white transition-all shadow-sm shrink-0"
+              title="Khóa lại tab Sheet / GAS"
+            >
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden sm:inline">Khóa Tab</span>
+            </button>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
