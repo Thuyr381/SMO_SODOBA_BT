@@ -758,7 +758,15 @@ export default function App() {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-1 sm:p-3 pb-28">
+      <main
+        className={`flex-1 max-w-7xl w-full mx-auto px-1 py-0.5 sm:px-3 sm:py-1 transition-all ${
+          currentView === 'floorplan'
+            ? selectedTables.size > 0
+              ? 'pb-20'
+              : 'pb-1 overflow-hidden'
+            : 'pb-24'
+        }`}
+      >
         {currentView === 'floorplan' && (
           <FloorCanvas
             tables={INITIAL_TABLES}

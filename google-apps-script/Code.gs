@@ -624,18 +624,18 @@ function formatBanListString(banInput) {
     if (clean === "2B" || clean === "VIP2" || clean === "VIP 2" || clean === "LẦU 2B" || clean === "LAU 2B") return "VIP2";
 
     var matchVip = clean.match(/^(?:VIP\s*|B)?(70|72|74|76)$/i);
-    if (matchVip) return "VIP" + matchVip[1];
+    if (matchVip) return "B" + matchVip[1];
 
     if (/^B0*(\d+)$/i.test(clean)) {
       var matchB = clean.match(/^B0*(\d+)$/i);
       var num = parseInt(matchB[1], 10);
-      if (num === 70 || num === 72 || num === 74 || num === 76) return "VIP" + num;
+      if (num === 70 || num === 72 || num === 74 || num === 76) return "B" + num;
       return "B" + ("0" + num).slice(-2);
     }
 
     if (/^\d+$/.test(clean)) {
       var n = parseInt(clean, 10);
-      if (n === 70 || n === 72 || n === 74 || n === 76) return "VIP" + n;
+      if (n === 70 || n === 72 || n === 74 || n === 76) return "B" + n;
       return "B" + ("0" + n).slice(-2);
     }
     return clean;
@@ -1657,49 +1657,58 @@ function handleDeleteMenuGS(ss, data) {
 // ============================================================================
 
 /**
- * Ghi trạng thái rỗng đẹp mắt cho tab VIEW_HOMNAY khi chưa có bàn nào hôm nay
+ * Ghi trạng thái rỗng cho tab VIEW_HOMNAY khi chưa có bàn nào hôm nay mà KHÔNG phá vỡ tỉ lệ cột
  */
 function writeEmptyViewHomNay(viewSheet, todayStr) {
-  viewSheet.clear();
   var headers = [
     "STT", "ID ĐẶT", "GIỜ ĐẶT", "BÀN XẾP", "TÊN KHÁCH", 
     "SỐ ĐIỆN THOẠI", "SỐ KHÁCH", "TRẠNG THÁI", "TIỀN CỌC", 
     "MÓN ĐÃ ĐẶT (TỪ DATMON)", "GHI CHÚ", "NGƯỜI NHẬP"
   ];
-  viewSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  var lastRow = viewSheet.getLastRow();
+  if (lastRow > 1) {
+    viewSheet.getRange(2, 1, lastRow - 1, viewSheet.getMaxColumns()).clearContent();
+  }
+  if (lastRow === 0) {
+    viewSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    viewSheet.getRange(1, 1, 1, headers.length)
+             .setBackground("#1e293b").setFontColor("#f8fafc").setFontWeight("bold").setHorizontalAlignment("center");
+    viewSheet.setFrozenRows(1);
+  }
   viewSheet.getRange(2, 1, 1, headers.length).setValues([[
     1, "-", "-", "-", "Hôm nay chưa có đơn đặt bàn nào (" + todayStr + ")", "-", "-", "-", "-", "-", "-", "-"
   ]]);
-  viewSheet.getRange(1, 1, 1, headers.length)
-           .setBackground("#1e293b").setFontColor("#f8fafc").setFontWeight("bold").setHorizontalAlignment("center");
-  viewSheet.setFrozenRows(1);
-  viewSheet.autoResizeColumns(1, headers.length);
 }
 
 /**
- * Ghi trạng thái rỗng đẹp mắt cho tab VIEW_BEP_HOMNAY khi chưa có món nào hôm nay
+ * Ghi trạng thái rỗng cho tab VIEW_BEP_HOMNAY khi chưa có món nào hôm nay mà KHÔNG phá vỡ tỉ lệ cột
  */
 function writeEmptyViewBepHomNay(viewSheet, todayStr) {
-  viewSheet.clear();
   var headers = [
     "STT", "GIỜ LÊN MÓN", "BÀN", "TÊN MÓN ĂN", "SỐ LƯỢNG", 
     "GHI CHÚ ĐẦU BẾP", "TÊN KHÁCH", "SỐ KHÁCH", 
     "TRẠNG THÁI MÓN", "MÃ MÓN", "MÃ ĐƠN"
   ];
-  viewSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  var lastRow = viewSheet.getLastRow();
+  if (lastRow > 1) {
+    viewSheet.getRange(2, 1, lastRow - 1, viewSheet.getMaxColumns()).clearContent();
+    viewSheet.getRange(2, 6, lastRow - 1, 1).setBackground(null).setFontColor(null).setFontWeight("normal");
+  }
+  if (lastRow === 0) {
+    viewSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    viewSheet.getRange(1, 1, 1, headers.length)
+             .setBackground("#065f46").setFontColor("#ffffff").setFontWeight("bold").setHorizontalAlignment("center");
+    viewSheet.setFrozenRows(1);
+  }
   viewSheet.getRange(2, 1, 1, headers.length).setValues([[
     1, "-", "-", "Hôm nay chưa có món nào cần nấu (" + todayStr + ")", "-", "-", "-", "-", "-", "-", "-"
   ]]);
-  viewSheet.getRange(1, 1, 1, headers.length)
-           .setBackground("#065f46").setFontColor("#ffffff").setFontWeight("bold").setHorizontalAlignment("center");
-  viewSheet.setFrozenRows(1);
-  viewSheet.autoResizeColumns(1, headers.length);
 }
 
 /**
  * Cập nhật tab VIEW_HOMNAY dành cho Chủ SMO và Quản lý
  * Kiểm tra ngày trong tab DATBAN có trùng với ngày hiện tại (múi giờ VN) hay không.
- * Nếu có thì tự điền đầy đủ thông tin vào tab VIEW_HOMNAY.
+ * Nếu có thì tự điền đầy đủ thông tin vào tab VIEW_HOMNAY đúng định dạng và KHÔNG phá vỡ tỉ lệ cột.
  */
 function updateViewHomNay(ss) {
   if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1754,8 +1763,9 @@ function updateViewHomNay(ss) {
     if (isDateMatchingTodayGS(ngayDatRaw, idDat)) {
       var gioDat = formatTimeCellGS(r[colMap.gio_dat], dispR[colMap.gio_dat]) || "18:00";
       var tenKhach = r[colMap.ten_khach] ? r[colMap.ten_khach].toString() : "Khách Lẻ";
-      var sdt = r[colMap.sdt] ? ("'" + r[colMap.sdt].toString()) : "";
-      var soKhach = r[colMap.so_khach] || 0;
+      var rawSdt = dispR[colMap.sdt] || (r[colMap.sdt] ? r[colMap.sdt].toString() : "");
+      var sdt = rawSdt ? rawSdt.toString().replace(/^'+/, '') : "";
+      var soKhach = Number(r[colMap.so_khach]) || 0;
       var rawBan = r[colMap.ban_xep] ? r[colMap.ban_xep].toString() : "";
       var banXep = formatBanListString(rawBan) || rawBan;
       var trangThai = r[colMap.trang_thai] ? r[colMap.trang_thai].toString() : "ĐÃ ĐẶT";
@@ -1787,23 +1797,38 @@ function updateViewHomNay(ss) {
     return (a.gio_dat || "").localeCompare(b.gio_dat || "");
   });
 
-  // Ghi vào sheet VIEW_HOMNAY
-  viewSheet.clear();
   var headers = [
     "STT", "ID ĐẶT", "GIỜ ĐẶT", "BÀN XẾP", "TÊN KHÁCH", 
     "SỐ ĐIỆN THOẠI", "SỐ KHÁCH", "TRẠNG THÁI", "TIỀN CỌC", 
     "MÓN ĐÃ ĐẶT (TỪ DATMON)", "GHI CHÚ", "NGƯỜI NHẬP"
   ];
 
-  var outputData = [headers];
+  // Khởi tạo dòng tiêu đề nếu sheet mới tinh
+  var lastRow = viewSheet.getLastRow();
+  if (lastRow === 0) {
+    viewSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    viewSheet.getRange(1, 1, 1, headers.length)
+             .setBackground("#1e293b")
+             .setFontColor("#f8fafc")
+             .setFontWeight("bold")
+             .setHorizontalAlignment("center");
+    viewSheet.setFrozenRows(1);
+  }
+
+  // Xóa sạch nội dung cũ từ dòng 2 trở đi mà KHÔNG xóa độ rộng cột và định dạng sẵn có
+  if (lastRow > 1) {
+    viewSheet.getRange(2, 1, lastRow - 1, viewSheet.getMaxColumns()).clearContent();
+  }
+
+  var dataRows = [];
   if (todayBookings.length === 0) {
-    outputData.push([
+    dataRows.push([
       1, "-", "-", "-", "Hôm nay chưa có đơn đặt bàn nào (" + todayStr + ")", "-", "-", "-", "-", "-", "-", "-"
     ]);
   } else {
     for (var k = 0; k < todayBookings.length; k++) {
       var b = todayBookings[k];
-      outputData.push([
+      dataRows.push([
         k + 1,
         b.id_dat,
         b.gio_dat,
@@ -1820,21 +1845,12 @@ function updateViewHomNay(ss) {
     }
   }
 
-  viewSheet.getRange(1, 1, outputData.length, headers.length).setValues(outputData);
+  // Ghi dữ liệu vào sheet từ dòng 2
+  viewSheet.getRange(2, 1, dataRows.length, headers.length).setValues(dataRows);
 
-  // Định dạng tiêu đề và màu sắc
-  var headerRange = viewSheet.getRange(1, 1, 1, headers.length);
-  headerRange.setBackground("#1e293b")
-             .setFontColor("#f8fafc")
-             .setFontWeight("bold")
-             .setHorizontalAlignment("center");
-
-  // Định dạng viền và căn chỉnh
-  var allDataRange = viewSheet.getRange(1, 1, outputData.length, headers.length);
+  // Định dạng viền nhẹ cho các dòng dữ liệu mà không ảnh hưởng tỉ lệ cột
+  var allDataRange = viewSheet.getRange(1, 1, dataRows.length + 1, headers.length);
   allDataRange.setBorder(true, true, true, true, true, true, "#cbd5e1", SpreadsheetApp.BorderStyle.SOLID);
-
-  viewSheet.setFrozenRows(1);
-  viewSheet.autoResizeColumns(1, headers.length);
 
   return { status: "success", count: todayBookings.length, date: todayStr };
 }
@@ -1843,6 +1859,7 @@ function updateViewHomNay(ss) {
  * Cập nhật tab VIEW_BEP_HOMNAY dành cho Đầu bếp và Bếp trưởng
  * Kiểm tra ngày trong tab DATMON có trùng với ngày hiện tại (múi giờ VN) hay không.
  * Tự động đối chiếu chéo với mã ID đặt bàn hôm nay từ DATBAN để không bao giờ sót món.
+ * Bảo toàn 100% tỉ lệ độ rộng cột và căn chỉnh mà người dùng đã thiết lập trên Google Sheets.
  */
 function updateViewBepHomNay(ss) {
   if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1914,7 +1931,7 @@ function updateViewBepHomNay(ss) {
         so_luong: Number(r[colMap.so_luong]) || 1,
         ghi_chu_bep: r[colMap.ghi_chu] ? r[colMap.ghi_chu].toString() : "",
         ten_khach: r[colMap.ten_khach] ? r[colMap.ten_khach].toString() : "",
-        so_khach: r[colMap.so_khach] || "",
+        so_khach: Number(r[colMap.so_khach]) || "",
         trang_thai_mon: trangThaiMon,
         id_mon: idMon,
         id_dat: idDat
@@ -1929,23 +1946,39 @@ function updateViewBepHomNay(ss) {
     return (a.ten_mon || "").localeCompare(b.ten_mon || "");
   });
 
-  // Ghi vào tab VIEW_BEP_HOMNAY
-  viewSheet.clear();
   var headers = [
     "STT", "GIỜ LÊN MÓN", "BÀN", "TÊN MÓN ĂN", "SỐ LƯỢNG", 
     "GHI CHÚ ĐẦU BẾP", "TÊN KHÁCH", "SỐ KHÁCH", 
     "TRẠNG THÁI MÓN", "MÃ MÓN", "MÃ ĐƠN"
   ];
 
-  var outputData = [headers];
+  // Khởi tạo dòng tiêu đề nếu sheet mới tinh
+  var lastRow = viewSheet.getLastRow();
+  if (lastRow === 0) {
+    viewSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    viewSheet.getRange(1, 1, 1, headers.length)
+             .setBackground("#065f46")
+             .setFontColor("#ffffff")
+             .setFontWeight("bold")
+             .setHorizontalAlignment("center");
+    viewSheet.setFrozenRows(1);
+  }
+
+  // Xóa nội dung cũ từ dòng 2 trở đi mà KHÔNG xóa tỉ lệ độ rộng cột
+  if (lastRow > 1) {
+    viewSheet.getRange(2, 1, lastRow - 1, viewSheet.getMaxColumns()).clearContent();
+    viewSheet.getRange(2, 6, lastRow - 1, 1).setBackground(null).setFontColor(null).setFontWeight("normal");
+  }
+
+  var dataRows = [];
   if (todayDishes.length === 0) {
-    outputData.push([
+    dataRows.push([
       1, "-", "-", "Hôm nay chưa có món nào cần nấu (" + todayStr + ")", "-", "-", "-", "-", "-", "-", "-"
     ]);
   } else {
     for (var k = 0; k < todayDishes.length; k++) {
       var d = todayDishes[k];
-      outputData.push([
+      dataRows.push([
         k + 1,
         d.gio_dat,
         d.ban,
@@ -1961,30 +1994,21 @@ function updateViewBepHomNay(ss) {
     }
   }
 
-  viewSheet.getRange(1, 1, outputData.length, headers.length).setValues(outputData);
-
-  // Định dạng tiêu đề màu xanh bếp (Emerald/Green)
-  var headerRange = viewSheet.getRange(1, 1, 1, headers.length);
-  headerRange.setBackground("#065f46")
-             .setFontColor("#ffffff")
-             .setFontWeight("bold")
-             .setHorizontalAlignment("center");
+  // Ghi dữ liệu vào sheet
+  viewSheet.getRange(2, 1, dataRows.length, headers.length).setValues(dataRows);
 
   // Viền bảng
-  var allRange = viewSheet.getRange(1, 1, outputData.length, headers.length);
+  var allRange = viewSheet.getRange(1, 1, dataRows.length + 1, headers.length);
   allRange.setBorder(true, true, true, true, true, true, "#cbd5e1", SpreadsheetApp.BorderStyle.SOLID);
 
-  // Tô màu nổi bật các dòng có Ghi chú bếp (vàng/cam)
-  for (var rowIdx = 1; rowIdx < outputData.length; rowIdx++) {
-    var noteVal = outputData[rowIdx][5]; // Cột GHI CHÚ ĐẦU BẾP
+  // Tô màu nổi bật các dòng có Ghi chú bếp (màu vàng nhạt #fef3c7, chữ nâu cam #b45309 đậm)
+  for (var rowIdx = 0; rowIdx < dataRows.length; rowIdx++) {
+    var noteVal = dataRows[rowIdx][5]; // Cột GHI CHÚ ĐẦU BẾP
     if (noteVal && noteVal.toString().trim() !== "" && noteVal.toString().trim() !== "-") {
-      var noteCell = viewSheet.getRange(rowIdx + 1, 6);
+      var noteCell = viewSheet.getRange(rowIdx + 2, 6);
       noteCell.setBackground("#fef3c7").setFontColor("#b45309").setFontWeight("bold");
     }
   }
-
-  viewSheet.setFrozenRows(1);
-  viewSheet.autoResizeColumns(1, headers.length);
 
   return { status: "success", count: todayDishes.length, date: todayStr };
 }

@@ -228,21 +228,32 @@ export const FloorBlueprint: React.FC<FloorBlueprintProps> = ({
           id="blueprint-ground-floor-zone"
           className="flex-1 bg-[#fff9c4] p-1.5 flex flex-col justify-between gap-1.5"
         >
-          {/* Row 0: Top right row (47, 46, 45, 44) */}
-          <div className="flex justify-end gap-1">
-            <div className="w-8 sm:w-9">{renderTable('47')}</div>
-            <div className="w-8 sm:w-9">{renderTable('46')}</div>
-            <div className="w-8 sm:w-9">{renderTable('45')}</div>
-            <div className="w-8 sm:w-9">{renderTable('44')}</div>
+          {/* Row 0: Top right row (47, 46, 45, 44) - Căn thẳng hàng với các bàn bên phải, chừa lối đi thẳng */}
+          <div className="flex items-center justify-between">
+            <div className="w-[68px] sm:w-[76px] shrink-0" />
+            {/* Lối đi thẳng phía trên */}
+            <div className="w-6 sm:w-7 shrink-0" />
+            <div className="flex gap-1 justify-end flex-1">
+              <div className="w-8 sm:w-9">{renderTable('47')}</div>
+              <div className="w-8 sm:w-9">{renderTable('46')}</div>
+              <div className="w-8 sm:w-9">{renderTable('45')}</div>
+              <div className="w-8 sm:w-9">{renderTable('44')}</div>
+            </div>
           </div>
 
-          {/* Row 1: [7, 6] ---gap--- [5, 4, 3, 2, 1] */}
-          <div className="flex items-center justify-between gap-1">
-            <div className="flex gap-1">
+          {/* Row 1: [7, 6] --- LỐI ĐI THẲNG --- [5, 4, 3, 2, 1] */}
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1 w-[68px] sm:w-[76px] shrink-0 justify-start">
               <div className="w-8 sm:w-9">{renderTable('7')}</div>
               <div className="w-8 sm:w-9">{renderTable('6')}</div>
             </div>
-            <div className="flex gap-1">
+            {/* Lối đi thẳng giữa Bàn 6 và Bàn 5 */}
+            <div className="w-6 sm:w-7 shrink-0 flex items-center justify-center pointer-events-none">
+              <span className="hidden sm:inline text-[8px] font-black text-amber-700/40 uppercase tracking-widest -rotate-90 select-none">
+                LỐI ĐI
+              </span>
+            </div>
+            <div className="flex gap-1 justify-end flex-1">
               <div className="w-8 sm:w-9">{renderTable('5')}</div>
               <div className="w-8 sm:w-9">{renderTable('4')}</div>
               <div className="w-8 sm:w-9">{renderTable('3')}</div>
@@ -251,13 +262,14 @@ export const FloorBlueprint: React.FC<FloorBlueprintProps> = ({
             </div>
           </div>
 
-          {/* Row 2: [8, 9] ---gap--- [10, 11, 12, 13, 14] */}
-          <div className="flex items-center justify-between gap-1">
-            <div className="flex gap-1">
+          {/* Row 2: [8, 9] --- LỐI ĐI THẲNG --- [10, 11, 12, 13, 14] */}
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1 w-[68px] sm:w-[76px] shrink-0 justify-start">
               <div className="w-8 sm:w-9">{renderTable('8')}</div>
               <div className="w-8 sm:w-9">{renderTable('9')}</div>
             </div>
-            <div className="flex gap-1">
+            <div className="w-6 sm:w-7 shrink-0 flex items-center justify-center pointer-events-none" />
+            <div className="flex gap-1 justify-end flex-1">
               <div className="w-8 sm:w-9">{renderTable('10')}</div>
               <div className="w-8 sm:w-9">{renderTable('11')}</div>
               <div className="w-8 sm:w-9">{renderTable('12')}</div>
@@ -266,13 +278,14 @@ export const FloorBlueprint: React.FC<FloorBlueprintProps> = ({
             </div>
           </div>
 
-          {/* Row 3: [21, 20] ---gap--- [19, 18, 17, 16, 15] */}
-          <div className="flex items-center justify-between gap-1">
-            <div className="flex gap-1">
+          {/* Row 3: [21, 20] --- LỐI ĐI THẲNG --- [19, 18, 17, 16, 15] */}
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1 w-[68px] sm:w-[76px] shrink-0 justify-start">
               <div className="w-8 sm:w-9">{renderTable('21')}</div>
               <div className="w-8 sm:w-9">{renderTable('20')}</div>
             </div>
-            <div className="flex gap-1">
+            <div className="w-6 sm:w-7 shrink-0 flex items-center justify-center pointer-events-none" />
+            <div className="flex gap-1 justify-end flex-1">
               <div className="w-8 sm:w-9">{renderTable('19')}</div>
               <div className="w-8 sm:w-9">{renderTable('18')}</div>
               <div className="w-8 sm:w-9">{renderTable('17')}</div>
@@ -281,27 +294,29 @@ export const FloorBlueprint: React.FC<FloorBlueprintProps> = ({
             </div>
           </div>
 
-          {/* Row 4: [22, 23] ---gap--- [ SÂN KHẤU ] */}
-          <div className="flex items-center justify-between gap-1">
-            <div className="flex gap-1">
+          {/* Row 4: [22, 23] --- LỐI ĐI THẲNG --- [ SÂN KHẤU ] */}
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1 w-[68px] sm:w-[76px] shrink-0 justify-start">
               <div className="w-8 sm:w-9">{renderTable('22')}</div>
               <div className="w-8 sm:w-9">{renderTable('23')}</div>
             </div>
+            <div className="w-6 sm:w-7 shrink-0 flex items-center justify-center pointer-events-none" />
             {/* SÂN KHẤU Box */}
-            <div className="flex-1 h-12 bg-[#2b2b2b] border border-black rounded-[2px] flex items-center justify-center shadow-inner ml-2">
+            <div className="flex-1 h-11 bg-[#2b2b2b] border border-black rounded-[2px] flex items-center justify-center shadow-inner">
               <span className="text-[#ffd54f] font-black text-xs sm:text-sm tracking-wider uppercase">
                 SÂN KHẤU
               </span>
             </div>
           </div>
 
-          {/* Row 5: [30, 29] ---gap--- [28, 27, 26, 25, 24] */}
-          <div className="flex items-center justify-between gap-1">
-            <div className="flex gap-1">
+          {/* Row 5: [30, 29] --- LỐI ĐI THẲNG --- [28, 27, 26, 25, 24] */}
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1 w-[68px] sm:w-[76px] shrink-0 justify-start">
               <div className="w-8 sm:w-9">{renderTable('30')}</div>
               <div className="w-8 sm:w-9">{renderTable('29')}</div>
             </div>
-            <div className="flex gap-1">
+            <div className="w-6 sm:w-7 shrink-0 flex items-center justify-center pointer-events-none" />
+            <div className="flex gap-1 justify-end flex-1">
               <div className="w-8 sm:w-9">{renderTable('28')}</div>
               <div className="w-8 sm:w-9">{renderTable('27')}</div>
               <div className="w-8 sm:w-9">{renderTable('26')}</div>
@@ -310,13 +325,14 @@ export const FloorBlueprint: React.FC<FloorBlueprintProps> = ({
             </div>
           </div>
 
-          {/* Row 6: [31, 32] ---gap--- [33, 34, 35, 36, 37] */}
-          <div className="flex items-center justify-between gap-1">
-            <div className="flex gap-1">
+          {/* Row 6: [31, 32] --- LỐI ĐI THẲNG --- [33, 34, 35, 36, 37] */}
+          <div className="flex items-center justify-between">
+            <div className="flex gap-1 w-[68px] sm:w-[76px] shrink-0 justify-start">
               <div className="w-8 sm:w-9">{renderTable('31')}</div>
               <div className="w-8 sm:w-9">{renderTable('32')}</div>
             </div>
-            <div className="flex gap-1">
+            <div className="w-6 sm:w-7 shrink-0 flex items-center justify-center pointer-events-none" />
+            <div className="flex gap-1 justify-end flex-1">
               <div className="w-8 sm:w-9">{renderTable('33')}</div>
               <div className="w-8 sm:w-9">{renderTable('34')}</div>
               <div className="w-8 sm:w-9">{renderTable('35')}</div>
@@ -325,10 +341,11 @@ export const FloorBlueprint: React.FC<FloorBlueprintProps> = ({
             </div>
           </div>
 
-          {/* Row 7: [ 43 ] ---gap--- [42, 41, 40, 39, 38] */}
-          <div className="flex items-center justify-between gap-1">
-            <div className="w-[68px] sm:w-[76px]">{renderTable('43', 'w-full')}</div>
-            <div className="flex gap-1">
+          {/* Row 7: [ 43 ] --- LỐI ĐI THẲNG --- [42, 41, 40, 39, 38] */}
+          <div className="flex items-center justify-between">
+            <div className="w-[68px] sm:w-[76px] shrink-0">{renderTable('43', 'w-full')}</div>
+            <div className="w-6 sm:w-7 shrink-0 flex items-center justify-center pointer-events-none" />
+            <div className="flex gap-1 justify-end flex-1">
               <div className="w-8 sm:w-9">{renderTable('42')}</div>
               <div className="w-8 sm:w-9">{renderTable('41')}</div>
               <div className="w-8 sm:w-9">{renderTable('40')}</div>

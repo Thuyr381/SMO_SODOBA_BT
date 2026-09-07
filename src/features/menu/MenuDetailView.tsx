@@ -183,15 +183,15 @@ export const MenuDetailView: React.FC<MenuDetailViewProps> = ({
             <span>Quay lại</span>
           </button>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-bold text-white">
-                QUẢN LÝ MÓN ĂN - ĐƠN {booking.id_dat}
+            <div className="flex items-center gap-2 whitespace-nowrap">
+              <h2 className="text-sm sm:text-base font-bold text-white whitespace-nowrap">
+                QUẢN LÝ MÓN - <span className="font-mono text-amber-400">{booking.id_dat}</span>
               </h2>
-              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 whitespace-nowrap shrink-0">
                 {booking.trang_thai || 'ĐÃ ĐẶT'}
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-400 mt-0.5 truncate">
               Khách: <strong className="text-slate-200">{booking.ten_khach}</strong> ({booking.sdt}) • Vị trí: <strong className="text-amber-400">{formattedTables}</strong> • {booking.so_khach} khách
             </p>
           </div>

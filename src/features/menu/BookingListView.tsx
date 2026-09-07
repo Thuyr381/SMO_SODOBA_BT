@@ -197,8 +197,8 @@ export const BookingListView: React.FC<BookingListViewProps> = ({
             </div>
             <div>
               <h2 className="text-sm font-bold text-white flex flex-wrap items-center gap-2">
-                CHỨC NĂNG ĐẶT MÓN (TABLE DATMON)
-                <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-semibold transition-all ${
+                CHỨC NĂNG ĐẶT MÓN
+                <span className={`text-[11px] px-2.5 py-0.5 rounded-full font-semibold transition-all whitespace-nowrap shrink-0 ${
                   displayedDishesCount > 0
                     ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                     : 'bg-slate-800 text-slate-400 border border-slate-700'
@@ -208,9 +208,6 @@ export const BookingListView: React.FC<BookingListViewProps> = ({
                     : (dateFilter === 'ALL' ? '0 đơn đặt bàn (0 món)' : 'Ngày này chưa có đơn đặt bàn nào (0 món)')}
                 </span>
               </h2>
-              <p className="text-[11px] text-slate-400">
-                Đồng bộ 2 chiều với Google Sheets Tab DATMON & DATBAN
-              </p>
             </div>
           </div>
 
@@ -317,15 +314,15 @@ export const BookingListView: React.FC<BookingListViewProps> = ({
             </div>
 
             {/* Status Filters */}
-            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800 text-xs">
-              <span className="text-slate-400 text-[11px] font-semibold">Trạng thái:</span>
+            <div className="flex items-center gap-1.5 pt-2 border-t border-slate-800 text-xs overflow-x-auto no-scrollbar whitespace-nowrap">
+              <span className="text-slate-400 text-[11px] font-semibold whitespace-nowrap shrink-0">Trạng thái:</span>
               {['ALL', 'ĐÃ ĐẶT', 'ĐÃ XÁC NHẬN', 'ĐÃ ĐẾN'].map((st) => (
                 <button
                   key={st}
                   type="button"
                   id={`filter-status-${st}`}
                   onClick={() => setStatusFilter(st)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all ${
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-all ${
                     statusFilter === st
                       ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold'
                       : 'bg-slate-800 text-slate-400 hover:text-slate-200 border border-transparent'
@@ -334,7 +331,7 @@ export const BookingListView: React.FC<BookingListViewProps> = ({
                   {st === 'ALL' ? 'Tất cả' : st}
                 </button>
               ))}
-              <span className="ml-auto text-[11px] text-slate-400">
+              <span className="ml-auto text-[11px] text-slate-400 whitespace-nowrap shrink-0 pl-2">
                 Hiển thị <strong>{filteredBookings.length}</strong> đơn
               </span>
             </div>
@@ -364,35 +361,33 @@ export const BookingListView: React.FC<BookingListViewProps> = ({
                   <div
                     key={b.id_dat}
                     id={`booking-card-${b.id_dat}`}
-                    className="p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 shadow-md flex flex-col justify-between gap-3 transition-all"
+                    className="p-3.5 sm:p-4 rounded-2xl bg-slate-900 border border-slate-800 hover:border-slate-700 shadow-md flex flex-col justify-between gap-2.5 transition-all"
                   >
-                    {/* Top line: ID, Status, Date/Time */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                            {b.id_dat}
-                          </span>
-                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${getStatusBadge(b.trang_thai)}`}>
-                            {b.trang_thai || 'ĐÃ ĐẶT'}
-                          </span>
-                        </div>
-                        <h3 className="text-base font-bold text-white mt-1.5 flex items-center gap-1.5">
-                          <User className="w-4 h-4 text-slate-400" />
-                          {b.ten_khach}
-                        </h3>
-                      </div>
+                    {/* Dòng 1: Mã đơn & Trạng thái */}
+                    <div className="flex items-center gap-2 whitespace-nowrap">
+                      <span className="font-mono text-xs font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 whitespace-nowrap shrink-0">
+                        {b.id_dat}
+                      </span>
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap shrink-0 ${getStatusBadge(b.trang_thai)}`}>
+                        {b.trang_thai || 'ĐÃ ĐẶT'}
+                      </span>
+                    </div>
 
-                      <div className="text-right">
-                        <div className="flex items-center justify-end gap-1 text-xs text-slate-300 font-semibold">
-                          <Clock className="w-3.5 h-3.5 text-amber-400" />
-                          {formatTimeDual(b.gio_dat)} • {b.ngay_dat}
-                        </div>
-                        <div className="text-xs text-amber-400 font-black mt-1">
-                          Bàn: {formattedTables}
-                        </div>
+                    {/* Dòng 2: Khung thời gian & Bàn nằm dưới dòng Mã và Trạng thái */}
+                    <div className="flex flex-wrap items-center justify-between gap-1 text-xs">
+                      <div className="flex items-center gap-1.5 text-slate-300 font-semibold whitespace-nowrap">
+                        <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                        <span>{formatTimeDual(b.gio_dat)} • {b.ngay_dat}</span>
+                      </div>
+                      <div className="text-xs text-amber-400 font-black whitespace-nowrap">
+                        Bàn: {formattedTables}
                       </div>
                     </div>
+
+                    <h3 className="text-base font-bold text-white mt-0.5 flex items-center gap-1.5 truncate">
+                      <User className="w-4 h-4 text-slate-400 shrink-0" />
+                      <span className="truncate">{b.ten_khach}</span>
+                    </h3>
 
                     {/* Details row: Phone, guests, deposit, creator */}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-2.5 rounded-xl bg-slate-850 border border-slate-800 text-xs">
@@ -439,14 +434,14 @@ export const BookingListView: React.FC<BookingListViewProps> = ({
                           type="button"
                           id={`btn-manage-menu-${b.id_dat}`}
                           onClick={() => onOpenMenuDetail(b)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
                             countInDatMon > 0
                               ? 'bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-md'
                               : 'bg-amber-500/20 text-amber-300 hover:bg-amber-500 hover:text-slate-950 border border-amber-500/40'
                           }`}
                         >
-                          <Utensils className="w-3.5 h-3.5" />
-                          <span>{countInDatMon > 0 ? `Xem món (${countInDatMon} món • ${formatVND(amountInDatMon)})` : '+ Đặt món vào DATMON'}</span>
+                          <Utensils className="w-3.5 h-3.5 shrink-0" />
+                          <span className="whitespace-nowrap">{countInDatMon > 0 ? `Xem món (${countInDatMon} món • ${formatVND(amountInDatMon)})` : '+ Đặt món vào DATMON'}</span>
                         </button>
 
                         {onOpenEditBooking && (
@@ -454,26 +449,26 @@ export const BookingListView: React.FC<BookingListViewProps> = ({
                             type="button"
                             id={`btn-edit-booking-${b.id_dat}`}
                             onClick={() => onOpenEditBooking(b)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold transition-all"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold whitespace-nowrap transition-all"
                             title="Sửa thông tin khách & đổi bàn"
                           >
-                            <Edit className="w-3.5 h-3.5 text-amber-400" />
+                            <Edit className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                             <span>Sửa</span>
                           </button>
                         )}
                       </div>
 
                       {/* Status transition shortcuts */}
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 whitespace-nowrap">
                         {b.trang_thai !== 'ĐÃ XÁC NHẬN' && b.trang_thai !== 'HỦY' && (
                           <button
                             type="button"
                             id={`btn-confirm-booking-${b.id_dat}`}
                             onClick={() => onUpdateStatus(b, 'ĐÃ XÁC NHẬN')}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-600/30 text-amber-300 hover:bg-amber-600 hover:text-white text-[11px] font-semibold transition-colors"
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-600/30 text-amber-300 hover:bg-amber-600 hover:text-white text-[11px] font-semibold whitespace-nowrap transition-colors"
                           >
-                            <CheckCircle2 className="w-3 h-3" />
-                            Xác nhận
+                            <CheckCircle2 className="w-3 h-3 shrink-0" />
+                            <span>Xác nhận</span>
                           </button>
                         )}
 
@@ -482,10 +477,10 @@ export const BookingListView: React.FC<BookingListViewProps> = ({
                             type="button"
                             id={`btn-arrive-booking-${b.id_dat}`}
                             onClick={() => onUpdateStatus(b, 'ĐÃ ĐẾN')}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600/30 text-blue-300 hover:bg-blue-600 hover:text-white text-[11px] font-semibold transition-colors"
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-blue-600/30 text-blue-300 hover:bg-blue-600 hover:text-white text-[11px] font-semibold whitespace-nowrap transition-colors"
                           >
-                            <UserCheck className="w-3 h-3" />
-                            Đã đến
+                            <UserCheck className="w-3 h-3 shrink-0" />
+                            <span>Đã đến</span>
                           </button>
                         )}
 
@@ -494,10 +489,10 @@ export const BookingListView: React.FC<BookingListViewProps> = ({
                             type="button"
                             id={`btn-cancel-booking-${b.id_dat}`}
                             onClick={() => onUpdateStatus(b, 'HỦY')}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-600/20 text-rose-400 hover:bg-rose-600 hover:text-white text-[11px] font-semibold transition-colors"
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-600/20 text-rose-400 hover:bg-rose-600 hover:text-white text-[11px] font-semibold whitespace-nowrap transition-colors"
                           >
-                            <Ban className="w-3 h-3" />
-                            Hủy
+                            <Ban className="w-3 h-3 shrink-0" />
+                            <span>Hủy</span>
                           </button>
                         )}
                       </div>

@@ -60,9 +60,9 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   }, [searchQuery, tables]);
 
   return (
-    <div id="search-bar-container" className="w-full max-w-[460px] sm:max-w-[490px] mx-auto relative mb-1.5 px-1">
+    <div id="search-bar-container" className="w-full max-w-[500px] mx-auto relative mb-1 px-1">
       <div className="relative flex items-center">
-        <Search className="w-4 h-4 text-amber-400 absolute left-3 pointer-events-none" />
+        <Search className="w-3.5 h-3.5 text-amber-400 absolute left-2.5 pointer-events-none" />
         <input
           type="text"
           id="input-search-table-customer"
@@ -75,7 +75,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             if (searchQuery.trim()) setIsOpenResults(true);
           }}
           placeholder="🔍 Tìm bàn: Tên khách / 3 số đuôi SĐT / Số bàn..."
-          className="w-full pl-9 pr-8 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-400 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-inner"
+          className="w-full pl-8 pr-7 py-1 rounded-md bg-slate-800 border border-slate-700 text-slate-100 placeholder-slate-400 text-[11px] sm:text-xs focus:outline-none focus:ring-1 focus:ring-amber-500 shadow-inner"
         />
         {searchQuery && (
           <button
@@ -85,22 +85,22 @@ export const SearchBar: React.FC<SearchBarProps> = ({
               onSearchChange('');
               setIsOpenResults(false);
             }}
-            className="absolute right-2.5 p-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-700"
+            className="absolute right-2 p-0.5 rounded text-slate-400 hover:text-white hover:bg-slate-700"
           >
-            <X className="w-3.5 h-3.5" />
+            <X className="w-3 h-3" />
           </button>
         )}
       </div>
 
       {/* Matching summary chip badge */}
       {searchQuery.trim() && (
-        <div className="flex items-center justify-between mt-1 px-1 text-[11px] text-amber-400 font-medium">
+        <div className="flex items-center justify-between mt-0.5 px-1 text-[10px] text-amber-400 font-medium">
           <span className="flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-amber-400" />
+            <Sparkles className="w-2.5 h-2.5 text-amber-400" />
             Tìm thấy <strong>{matchingTableIds.size} bàn</strong> phù hợp
           </span>
           {matchingTableIds.size > 0 && (
-            <span className="text-slate-300 font-mono">
+            <span className="text-slate-300 font-mono text-[9px]">
               [{Array.from(matchingTableIds).join(', ')}]
             </span>
           )}

@@ -37,28 +37,42 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = ({
   const [fitScale, setFitScale] = useState(0.85);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Calculate dynamic scale factor to fit floorplan into 1 single frame/viewport
+  // Natural blueprint dimensions
+  const NATURAL_HEIGHT = 560;
+  const NATURAL_WIDTH = 450;
+
+  // Calculate dynamic scale factor to fit floorplan into 1 single frame/viewport without scrolling
   useEffect(() => {
     const calculateScale = () => {
       const windowW = window.innerWidth;
       const windowH = window.innerHeight;
 
-      // Natural blueprint dimensions
-      const naturalW = 450;
-      const naturalH = 590;
+      // Measure existing top bars dynamically if rendered
+      const headerEl = document.getElementById('header-bar');
+      const actionEl = document.getElementById('action-toolbar');
+      const searchEl = document.getElementById('search-bar-container');
+      const zoomEl = document.getElementById('canvas-zoom-bar');
 
-      // Available width (padding 12px)
-      const availW = Math.min(windowW - 16, 480);
-      // Available height minus top header, action toolbar, search bar, zoom controls, and bottom bar
-      // On mobile / Telegram Mini App, header+nav+search+bottom ~180px
-      const availH = Math.max(windowH - 185, 340);
+      const topOccupied =
+        (headerEl?.offsetHeight || 84) +
+        (actionEl?.offsetHeight || 38) +
+        (searchEl?.offsetHeight || 34) +
+        (zoomEl?.offsetHeight || 26);
 
-      const scaleByW = availW / naturalW;
-      const scaleByH = availH / naturalH;
+      // Safe bottom space
+      const bottomSafe = 16;
+
+      // Available width (with minimal margin)
+      const availW = Math.min(windowW - 12, NATURAL_WIDTH);
+      // Available height strictly within current viewport
+      const availH = Math.max(windowH - topOccupied - bottomSafe, 220);
+
+      const scaleByW = availW / NATURAL_WIDTH;
+      const scaleByH = availH / NATURAL_HEIGHT;
 
       // Fit mode ensures BOTH width and height fit on the screen without scrolling
-      const calculated = Math.min(scaleByW, scaleByH, 1.05);
-      const rounded = Math.max(0.52, Math.min(Number(calculated.toFixed(2)), 1.1));
+      const calculated = Math.min(scaleByW, scaleByH);
+      const rounded = Math.max(0.45, Math.min(Number(calculated.toFixed(2)), 1.05));
       setFitScale(rounded);
     };
 
@@ -77,7 +91,7 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = ({
 
   const handleZoomOut = () => {
     setIsFitMode(false);
-    setManualScale((prev) => Math.max(Number((prev - 0.1).toFixed(2)), 0.5));
+    setManualScale((prev) => Math.max(Number((prev - 0.1).toFixed(2)), 0.45));
   };
 
   const handleReset100 = () => {
@@ -152,12 +166,8 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = ({
     return matched;
   }, [searchQuery, bookings, tables]);
 
-  // Blueprint natural height constant for transform offset compensation
-  const NATURAL_HEIGHT = 590;
-  const NATURAL_WIDTH = 450;
-
   return (
-    <div id="floorplan-canvas-wrapper" className="w-full flex flex-col items-center py-0.5">
+    <div id="floorplan-canvas-wrapper" className="w-full flex flex-col items-center py-0">
       {/* Search Input Box */}
       <SearchBar
         searchQuery={searchQuery}
@@ -173,10 +183,10 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = ({
       />
 
       {/* Responsive Viewport & Zoom Toolbar */}
-      <div className="w-full max-w-lg flex items-center justify-between px-2 py-1 mb-1 text-xs">
+      <div id="canvas-zoom-bar" className="w-full max-w-[500px] flex items-center justify-between px-2 py-0.5 mb-0.5 text-xs">
         <div className="flex items-center gap-1.5 text-slate-400">
-          <span className="text-[11px] font-medium text-slate-300">Sơ đồ S8</span>
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-amber-300 border border-slate-700 font-mono font-bold">
+          <span className="text-[10px] sm:text-[11px] font-medium text-slate-300">Sơ đồ S8</span>
+          <span className="text-[9px] px-1 py-0.2 rounded bg-slate-800 text-amber-300 border border-slate-700 font-mono font-bold">
             {Math.round(currentScale * 100)}%
           </span>
         </div>
@@ -187,14 +197,14 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = ({
             type="button"
             id="btn-toggle-fit-screen"
             onClick={handleToggleFit}
-            className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold border transition-colors ${
+            className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border transition-colors ${
               isFitMode
-                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-sm'
+                ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-xs'
                 : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'
             }`}
             title="Tự động thu phóng để Sơ đồ nằm gọn trong 1 khung hình (không cần cuộn trang)"
           >
-            <Maximize2 className="w-3 h-3" />
+            <Maximize2 className="w-2.5 h-2.5" />
             <span>{isFitMode ? 'Vừa khung hình' : 'Tự do'}</span>
           </button>
 
@@ -203,10 +213,10 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = ({
             type="button"
             id="btn-zoom-out"
             onClick={handleZoomOut}
-            className="w-6 h-6 flex items-center justify-center rounded bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition-colors"
+            className="w-5 h-5 flex items-center justify-center rounded bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition-colors"
             title="Thu nhỏ sơ đồ"
           >
-            <ZoomOut className="w-3 h-3" />
+            <ZoomOut className="w-2.5 h-2.5" />
           </button>
 
           {/* Reset 100% */}
@@ -214,10 +224,10 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = ({
             type="button"
             id="btn-zoom-reset"
             onClick={handleReset100}
-            className="px-1.5 h-6 flex items-center justify-center rounded bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 text-[10px] font-mono transition-colors"
+            className="px-1 h-5 flex items-center justify-center rounded bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 text-[9px] font-mono transition-colors"
             title="Về kích thước chuẩn 100%"
           >
-            <RotateCcw className="w-2.5 h-2.5 mr-0.5" />
+            <RotateCcw className="w-2 h-2 mr-0.5" />
             100%
           </button>
 
@@ -226,10 +236,10 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = ({
             type="button"
             id="btn-zoom-in"
             onClick={handleZoomIn}
-            className="w-6 h-6 flex items-center justify-center rounded bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition-colors"
+            className="w-5 h-5 flex items-center justify-center rounded bg-slate-800 text-slate-300 border border-slate-700 hover:bg-slate-700 transition-colors"
             title="Phóng to sơ đồ"
           >
-            <ZoomIn className="w-3 h-3" />
+            <ZoomIn className="w-2.5 h-2.5" />
           </button>
         </div>
       </div>

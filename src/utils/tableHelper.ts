@@ -280,7 +280,13 @@ export function formatTableDisplay(tableId: string | number): string {
   const norm = normalizeTableId(tableId);
   if (norm === 'VIP1') return 'Lầu 2A (VIP1)';
   if (norm === 'VIP2') return 'Lầu 2B (VIP2)';
-  if (norm.startsWith('VIP')) return norm;
+  if (norm.startsWith('VIP')) {
+    const vNum = norm.replace('VIP', '');
+    if (['70', '72', '74', '76'].includes(vNum)) {
+      return `Bàn B${vNum}`;
+    }
+    return norm;
+  }
   const num = parseInt(norm, 10);
   if (!isNaN(num)) {
     return `Bàn ${num < 10 ? `0${num}` : num}`;
@@ -291,7 +297,8 @@ export function formatTableDisplay(tableId: string | number): string {
 /**
  * Chuẩn hóa 1 mã bàn thành mã chuẩn theo cấu trúc nhà hàng:
  * - 1 -> 'B01', 5 -> 'B05', 54 -> 'B54'
- * - VIP1, VIP2, VIP70, VIP72, VIP74, VIP76 giữ nguyên chuẩn VIP
+ * - 70, 72, 74, 76 -> 'B70', 'B72', 'B74', 'B76' (theo yêu cầu: B72 thay vì VIP72)
+ * - VIP1, VIP2 giữ nguyên chuẩn VIP
  */
 export function formatTableStandardCode(tableId: string | number | undefined | null): string {
   if (!tableId) return '';
@@ -301,14 +308,15 @@ export function formatTableStandardCode(tableId: string | number | undefined | n
   if (clean === '2A' || clean === 'VIP1' || clean === 'VIP 1' || clean === 'LẦU 2A' || clean === 'LAU 2A') return 'VIP1';
   if (clean === '2B' || clean === 'VIP2' || clean === 'VIP 2' || clean === 'LẦU 2B' || clean === 'LAU 2B') return 'VIP2';
 
-  const matchVip = clean.match(/^(?:VIP\s*|B)?(70|72|74|76)$/i);
-  if (matchVip) return `VIP${matchVip[1]}`;
+  // Bàn 70, 72, 74, 76 -> Format thành B70, B72, B74, B76 thay vì VIP72
+  const match70_76 = clean.match(/^(?:VIP\s*|B)?(70|72|74|76)$/i);
+  if (match70_76) return `B${match70_76[1]}`;
 
   // Dạng B05, B5, B54...
   const matchB = clean.match(/^B0*(\d+)$/i);
   if (matchB) {
     const n = parseInt(matchB[1], 10);
-    if (n === 70 || n === 72 || n === 74 || n === 76) return `VIP${n}`;
+    if (n === 70 || n === 72 || n === 74 || n === 76) return `B${n}`;
     return `B${n < 10 ? `0${n}` : n}`;
   }
 
@@ -316,7 +324,7 @@ export function formatTableStandardCode(tableId: string | number | undefined | n
   const matchNum = clean.match(/^0*(\d+)$/);
   if (matchNum) {
     const n = parseInt(matchNum[1], 10);
-    if (n === 70 || n === 72 || n === 74 || n === 76) return `VIP${n}`;
+    if (n === 70 || n === 72 || n === 74 || n === 76) return `B${n}`;
     return `B${n < 10 ? `0${n}` : n}`;
   }
 
