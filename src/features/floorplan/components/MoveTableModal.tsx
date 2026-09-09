@@ -137,25 +137,30 @@ export const MoveTableModal: React.FC<MoveTableModalProps> = ({
     <AnimatePresence>
       <div
         id="move-table-modal-overlay"
-        className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm overflow-y-auto"
+        className="fixed inset-0 z-50 flex items-center justify-center p-1 sm:p-4 bg-black/80 backdrop-blur-sm overflow-hidden"
       >
         <motion.div
           id="move-table-modal-card"
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          className="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[92vh]"
+          className="w-full h-[calc(100dvh-0.5rem)] max-h-[calc(100dvh-0.5rem)] sm:h-auto sm:max-h-[92dvh] max-w-2xl bg-slate-900 border border-slate-700 rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col"
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-5 py-3.5 bg-slate-800 border-b border-slate-700">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-xl bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center justify-center font-bold">
+          <div className="shrink-0 flex items-start justify-between gap-2 px-3 py-2.5 sm:px-5 sm:py-3.5 bg-slate-800 border-b border-slate-700">
+            <div className="min-w-0 flex flex-1 items-start gap-2">
+              <div className="shrink-0 w-8 h-8 rounded-xl bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center justify-center font-bold">
                 🔄
               </div>
-              <div>
-                <h3 className="text-base font-bold text-white">DỜI TOÀN BỘ NHÓM BÀN (GROUP TRANSFER)</h3>
-                <p className="text-xs text-slate-300">
-                  Khách: <strong className="text-amber-400">{booking.ten_khach}</strong> ({booking.sdt}) • Mã: {booking.id_dat}
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm sm:text-base leading-tight font-bold text-white">
+                  ĐỔI TOÀN BỘ NHÓM BÀN <span className="whitespace-nowrap">(GROUP TRANSFER)</span>
+                </h3>
+                <p className="mt-1 text-[11px] sm:text-xs leading-snug text-slate-300 break-words">
+                  Khách: <strong className="text-amber-400">{booking.ten_khach}</strong>
+                  <span className="whitespace-nowrap"> ({booking.sdt})</span>
+                  <span className="hidden sm:inline"> • </span>
+                  <span className="block sm:inline">Mã: {booking.id_dat}</span>
                 </p>
               </div>
             </div>
@@ -163,18 +168,22 @@ export const MoveTableModal: React.FC<MoveTableModalProps> = ({
               type="button"
               id="btn-close-move-modal"
               onClick={onClose}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700"
+              aria-label="Đóng cửa sổ đổi bàn"
+              className="shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Body Content */}
-          <div className="p-4 sm:p-5 flex flex-col gap-4 overflow-y-auto">
+          <div
+            id="move-table-modal-body"
+            className="min-h-0 flex-1 p-3 sm:p-5 flex flex-col gap-3 sm:gap-4 overflow-y-auto overscroll-contain"
+          >
             {/* Step 1 & 2 Comparison Badge */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {/* Vị trí cũ (Nhóm bàn nguồn) */}
-              <div className="p-3 rounded-xl bg-rose-950/40 border border-rose-900/60 flex flex-col gap-1">
+              <div className="p-2.5 sm:p-3 rounded-xl bg-rose-950/40 border border-rose-900/60 flex flex-col gap-1">
                 <span className="text-[11px] font-bold text-rose-300 uppercase tracking-wider">
                   1. Vị trí nhóm bàn cũ (Tự động nhận diện):
                 </span>
@@ -194,7 +203,7 @@ export const MoveTableModal: React.FC<MoveTableModalProps> = ({
               </div>
 
               {/* Vị trí mới (Nhóm bàn đích) */}
-              <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-900/60 flex flex-col gap-1">
+              <div className="p-2.5 sm:p-3 rounded-xl bg-amber-950/40 border border-amber-900/60 flex flex-col gap-1">
                 <span className="text-[11px] font-bold text-amber-300 uppercase tracking-wider">
                   2. Nhóm bàn đích đã chọn ({selectedTargetTables.size}):
                 </span>
@@ -216,7 +225,9 @@ export const MoveTableModal: React.FC<MoveTableModalProps> = ({
                       </span>
                     ))
                   ) : (
-                    <span className="text-xs italic text-slate-400">Chạm vào bàn trống trên sơ đồ bên dưới...</span>
+                    <span className="text-xs font-semibold text-amber-100">
+                      Chạm vào một bàn màu vàng bên dưới để chọn bàn đích.
+                    </span>
                   )}
                 </div>
                 <span className="text-[10px] text-slate-400 mt-1">
@@ -235,15 +246,23 @@ export const MoveTableModal: React.FC<MoveTableModalProps> = ({
 
             {/* Table Picker Section */}
             <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-200 uppercase tracking-wider">
-                  Chọn bàn mới trên sơ đồ (Chỉ chọn bàn màu Vàng - Trống):
-                </label>
-                <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded-lg border border-slate-700 text-xs">
+              <div id="move-table-picker-header" className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div id="move-table-picker-label" className="min-w-0">
+                  <label className="block text-[11px] sm:text-xs font-bold leading-snug text-slate-200 uppercase tracking-wide sm:tracking-wider">
+                    Chọn bàn đích mới
+                  </label>
+                  <span className="block mt-0.5 text-[10px] leading-snug text-slate-400">
+                    Chỉ chọn bàn màu vàng — còn {availableEmptyTables.length} bàn trống.
+                  </span>
+                </div>
+                <div
+                  id="move-table-view-toggle"
+                  className="grid w-full grid-cols-2 items-center gap-1 bg-slate-800 p-0.5 rounded-lg border border-slate-700 text-xs sm:flex sm:w-auto shrink-0"
+                >
                   <button
                     type="button"
                     onClick={() => setViewMode('blueprint')}
-                    className={`px-2 py-1 rounded flex items-center gap-1 text-[11px] font-bold ${
+                    className={`min-w-0 justify-center px-2 py-1.5 sm:py-1 rounded flex items-center gap-1 text-[11px] font-bold whitespace-nowrap ${
                       viewMode === 'blueprint' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
                     }`}
                   >
@@ -252,7 +271,7 @@ export const MoveTableModal: React.FC<MoveTableModalProps> = ({
                   <button
                     type="button"
                     onClick={() => setViewMode('list')}
-                    className={`px-2 py-1 rounded flex items-center gap-1 text-[11px] font-bold ${
+                    className={`min-w-0 justify-center px-2 py-1.5 sm:py-1 rounded flex items-center gap-1 text-[11px] font-bold whitespace-nowrap ${
                       viewMode === 'list' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
                     }`}
                   >
@@ -262,7 +281,10 @@ export const MoveTableModal: React.FC<MoveTableModalProps> = ({
               </div>
 
               {viewMode === 'blueprint' ? (
-                <div className="p-2 bg-slate-950/80 rounded-xl border border-slate-800 max-h-[50vh] overflow-y-auto flex flex-col items-center">
+                <div
+                  id="move-table-blueprint-picker"
+                  className="p-1.5 sm:p-2 bg-slate-950/80 rounded-xl border border-slate-800 flex flex-col items-center [touch-action:pan-y]"
+                >
                   <FloorBlueprint
                     tables={tables}
                     statusMap={statusMap}
@@ -312,7 +334,7 @@ export const MoveTableModal: React.FC<MoveTableModalProps> = ({
             </div>
 
             {/* Note about kitchen print ticket */}
-            <div className="p-3 bg-slate-800/80 rounded-xl border border-slate-700 text-xs text-slate-300 flex items-start gap-2.5">
+            <div className="p-2.5 sm:p-3 bg-slate-800/80 rounded-xl border border-slate-700 text-xs text-slate-300 flex items-start gap-2.5">
               <Printer className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
               <div>
                 <strong className="text-white">Tự động xuất Phiếu Báo Bếp/Bar:</strong>
@@ -325,13 +347,17 @@ export const MoveTableModal: React.FC<MoveTableModalProps> = ({
           </div>
 
           {/* Footer Action Buttons */}
-          <div className="px-5 py-3.5 bg-slate-800/90 border-t border-slate-700 flex items-center justify-end gap-3">
+          <div
+            id="move-table-modal-footer"
+            className="shrink-0 px-3 py-2.5 sm:px-5 sm:py-3.5 bg-slate-800/95 border-t border-slate-700 flex items-center justify-end gap-2 sm:gap-3"
+            style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom))' }}
+          >
             <button
               type="button"
               id="btn-cancel-move"
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-4 py-2 rounded-xl bg-slate-700 text-slate-200 font-semibold hover:bg-slate-600 text-xs"
+              className="shrink-0 px-3 sm:px-4 py-2.5 sm:py-2 rounded-xl bg-slate-700 text-slate-200 font-semibold hover:bg-slate-600 text-xs"
             >
               Hủy bỏ
             </button>
@@ -341,16 +367,21 @@ export const MoveTableModal: React.FC<MoveTableModalProps> = ({
               id="btn-confirm-move"
               onClick={handleSubmit}
               disabled={isSubmitting || selectedTargetTables.size === 0}
-              className={`px-5 py-2 rounded-xl font-bold text-xs flex items-center gap-2 shadow-lg transition-all ${
+              className={`min-w-0 flex-1 sm:flex-none justify-center px-3 sm:px-5 py-2.5 sm:py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 sm:gap-2 shadow-lg transition-all ${
                 selectedTargetTables.size > 0
                   ? 'bg-orange-500 hover:bg-orange-400 text-slate-950 active:scale-95'
                   : 'bg-slate-700 text-slate-400 cursor-not-allowed'
               }`}
             >
-              <ArrowRightLeft className="w-4 h-4" />
-              {isSubmitting
-                ? 'Đang xử lý...'
-                : `XÁC NHẬN DỜI SANG [${Array.from(selectedTargetTables).join(', ')}]`}
+              <ArrowRightLeft className="w-4 h-4 shrink-0" />
+              {isSubmitting ? (
+                'Đang xử lý...'
+              ) : (
+                <>
+                  <span className="sm:hidden truncate">ĐỔI SANG [{Array.from(selectedTargetTables).join(', ')}]</span>
+                  <span className="hidden sm:inline">XÁC NHẬN ĐỔI SANG [{Array.from(selectedTargetTables).join(', ')}]</span>
+                </>
+              )}
             </button>
           </div>
         </motion.div>

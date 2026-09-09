@@ -205,9 +205,53 @@ try {
   const viewportWidth = await mobilePage.evaluate(() => document.documentElement.clientWidth);
   record('MT-19', 'Hiển thị trên màn hình điện thoại', bodyScrollWidth <= viewportWidth + 1, `Không tràn ngang (${bodyScrollWidth}px / viewport ${viewportWidth}px).`);
   await mobilePage.screenshot({ path: path.join(screenshotDir, '11-giao-dien-dien-thoai.png'), fullPage: false });
+
+  await mobilePage.locator('#table-card-56').click();
+  await mobilePage.locator('#table-detail-modal-card').waitFor({ state: 'visible' });
+  await mobilePage.locator('#btn-trigger-move-table').click();
+  const moveModal = mobilePage.locator('#move-table-modal-card');
+  await moveModal.waitFor({ state: 'visible' });
+  const moveLayout = await moveModal.evaluate((element) => {
+    const label = element.querySelector('#move-table-picker-label')?.getBoundingClientRect();
+    const toggle = element.querySelector('#move-table-view-toggle')?.getBoundingClientRect();
+    const rect = element.getBoundingClientRect();
+    const overlaps = Boolean(
+      label &&
+      toggle &&
+      label.left < toggle.right &&
+      label.right > toggle.left &&
+      label.top < toggle.bottom &&
+      label.bottom > toggle.top
+    );
+    return {
+      fitsViewport: rect.left >= 0 && rect.right <= window.innerWidth + 1 && rect.top >= 0 && rect.bottom <= window.innerHeight + 1,
+      hasHorizontalOverflow: element.scrollWidth > element.clientWidth + 1,
+      controlsOverlap: overlaps,
+    };
+  });
+  const moveTarget = moveModal.locator('#table-card-10');
+  await moveTarget.scrollIntoViewIfNeeded();
+  await moveTarget.click();
+  await mobilePage.waitForTimeout(250);
+  const moveConfirm = moveModal.locator('#btn-confirm-move');
+  const moveConfirmText = await moveConfirm.innerText();
+  const moveMobilePassed =
+    moveLayout.fitsViewport &&
+    !moveLayout.hasHorizontalOverflow &&
+    !moveLayout.controlsOverlap &&
+    (await moveConfirm.isEnabled()) &&
+    moveConfirmText.includes('[10]');
+  record(
+    'MT-20',
+    'Chọn bàn đích trong cửa sổ đổi bàn trên điện thoại',
+    moveMobilePassed,
+    `Modal vừa viewport, điều khiển không chồng lấn và nút xác nhận hiển thị bàn 10 (${moveConfirmText}).`
+  );
+  await mobilePage.screenshot({ path: path.join(screenshotDir, '12-doi-ban-tren-dien-thoai.png'), fullPage: false });
+  await moveModal.locator('#btn-close-move-modal').click();
   await mobileContext.close();
 
-  record('MT-20', 'Không có lỗi JavaScript nghiêm trọng', pageErrors.length === 0, pageErrors.length === 0 ? 'Không ghi nhận pageerror.' : pageErrors.join(' | '));
+  record('MT-21', 'Không có lỗi JavaScript nghiêm trọng', pageErrors.length === 0, pageErrors.length === 0 ? 'Không ghi nhận pageerror.' : pageErrors.join(' | '));
 } catch (error) {
   results.push({
     id: 'EXECUTION',

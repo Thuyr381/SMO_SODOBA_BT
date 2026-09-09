@@ -1,6 +1,6 @@
 {
-  "executedAt": "2026-09-09T06:25:22.929Z",
-  "baseUrl": "http://127.0.0.1:3011/",
+  "executedAt": "2026-09-09T10:29:31.022Z",
+  "baseUrl": "http://127.0.0.1:3014/",
   "environment": {
     "browser": "Google Chrome headless",
     "viewportDesktop": "1440x1000",
@@ -8,8 +8,8 @@
     "backendMode": "Offline Persistence & Local Engine (dữ liệu trình duyệt cô lập)"
   },
   "summary": {
-    "total": 20,
-    "passed": 20,
+    "total": 21,
+    "passed": 21,
     "failed": 0
   },
   "results": [
@@ -129,6 +129,12 @@
     },
     {
       "id": "MT-20",
+      "name": "Chọn bàn đích trong cửa sổ đổi bàn trên điện thoại",
+      "status": "PASS",
+      "detail": "Modal vừa viewport, điều khiển không chồng lấn và nút xác nhận hiển thị bàn 10 (ĐỔI SANG [10])."
+    },
+    {
+      "id": "MT-21",
       "name": "Không có lỗi JavaScript nghiêm trọng",
       "status": "PASS",
       "detail": "Không ghi nhận pageerror."
