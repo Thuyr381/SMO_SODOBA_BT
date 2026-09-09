@@ -10,7 +10,7 @@ interface BookingModalProps {
   selectedTableIds: string[];
   currentUserName: string;
   onClose: () => void;
-  onSubmit: (data: BookingPayload) => Promise<void>;
+  onSubmit: (data: BookingPayload) => Promise<void> | void;
 }
 
 export const BookingModal: React.FC<BookingModalProps> = ({
@@ -64,13 +64,12 @@ export const BookingModal: React.FC<BookingModalProps> = ({
     return Object.keys(errs).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validate()) return;
 
-    setIsSubmitting(true);
     try {
-      await onSubmit({
+      onSubmit({
         danh_sach_ban: selectedTableIds,
         ten_khach: tenKhach.trim(),
         sdt: sdt.trim(),
@@ -84,8 +83,6 @@ export const BookingModal: React.FC<BookingModalProps> = ({
       onClose();
     } catch (err) {
       console.error('Lỗi khi gửi form đặt bàn:', err);
-    } finally {
-      setIsSubmitting(false);
     }
   };
 

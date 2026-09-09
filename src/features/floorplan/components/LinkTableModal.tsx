@@ -1,10 +1,11 @@
 // src/features/floorplan/components/LinkTableModal.tsx
 import React, { useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Link2, AlertTriangle, Check, X, Users, Utensils, Map, List } from 'lucide-react';
+import { Link2, AlertTriangle, Check, X, Users, Utensils, Map as MapIcon, List } from 'lucide-react';
 import { BookingPayload, TableItem, TableStatusClass } from '../../../types';
 import { STATUS_COLORS } from '../../../config/constants';
 import { FloorBlueprint, CustomTableBadge } from './FloorBlueprint';
+import { BlueprintScaler } from './BlueprintScaler';
 
 interface LinkTableModalProps {
   isOpen: boolean;
@@ -225,7 +226,7 @@ export const LinkTableModal: React.FC<LinkTableModalProps> = ({
                       viewMode === 'blueprint' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    <Map className="w-3 h-3" /> Sơ đồ bàn
+                    <MapIcon className="w-3 h-3" /> Sơ đồ bàn
                   </button>
                   <button
                     type="button"
@@ -240,16 +241,18 @@ export const LinkTableModal: React.FC<LinkTableModalProps> = ({
               </div>
 
               {viewMode === 'blueprint' ? (
-                <div className="p-2 bg-slate-950/80 rounded-xl border border-slate-800 max-h-[50vh] overflow-y-auto flex flex-col items-center">
-                  <FloorBlueprint
-                    tables={tables}
-                    statusMap={statusMap}
-                    selectedTables={selectedAddTables}
-                    onToggleTable={toggleAddTable}
-                    isTableDisabled={isTableDisabled}
-                    customBadges={customBadges}
-                    compact
-                  />
+                <div className="p-1 sm:p-2 bg-slate-950/80 rounded-xl border border-slate-800 overflow-hidden flex flex-col items-center">
+                  <BlueprintScaler naturalWidth={436} naturalHeight={560}>
+                    <FloorBlueprint
+                      tables={tables}
+                      statusMap={statusMap}
+                      selectedTables={selectedAddTables}
+                      onToggleTable={toggleAddTable}
+                      isTableDisabled={isTableDisabled}
+                      customBadges={customBadges}
+                      compact
+                    />
+                  </BlueprintScaler>
                 </div>
               ) : (
                 <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 max-h-48 overflow-y-auto">

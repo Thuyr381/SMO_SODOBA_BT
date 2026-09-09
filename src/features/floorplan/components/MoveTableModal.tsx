@@ -4,7 +4,8 @@ import { AnimatePresence, motion } from 'motion/react';
 import { BookingPayload, TableItem, TableStatusClass } from '../../../types';
 import { STATUS_COLORS } from '../../../config/constants';
 import { FloorBlueprint, CustomTableBadge } from './FloorBlueprint';
-import { X, ArrowRightLeft, CheckCircle2, AlertTriangle, Printer, Map, List } from 'lucide-react';
+import { BlueprintScaler } from './BlueprintScaler';
+import { X, ArrowRightLeft, CheckCircle2, AlertTriangle, Printer, Map as MapIcon, List } from 'lucide-react';
 
 interface MoveTableModalProps {
   isOpen: boolean;
@@ -266,7 +267,7 @@ export const MoveTableModal: React.FC<MoveTableModalProps> = ({
                       viewMode === 'blueprint' ? 'bg-amber-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    <Map className="w-3 h-3" /> Sơ đồ bàn
+                    <MapIcon className="w-3 h-3" /> Sơ đồ bàn
                   </button>
                   <button
                     type="button"
@@ -283,17 +284,19 @@ export const MoveTableModal: React.FC<MoveTableModalProps> = ({
               {viewMode === 'blueprint' ? (
                 <div
                   id="move-table-blueprint-picker"
-                  className="p-1.5 sm:p-2 bg-slate-950/80 rounded-xl border border-slate-800 flex flex-col items-center [touch-action:pan-y]"
+                  className="p-1 sm:p-2 bg-slate-950/80 rounded-xl border border-slate-800 flex flex-col items-center [touch-action:pan-y] overflow-hidden"
                 >
-                  <FloorBlueprint
-                    tables={tables}
-                    statusMap={statusMap}
-                    selectedTables={selectedTargetTables}
-                    onToggleTable={toggleTargetTable}
-                    isTableDisabled={isTableDisabled}
-                    customBadges={customBadges}
-                    compact
-                  />
+                  <BlueprintScaler naturalWidth={436} naturalHeight={560}>
+                    <FloorBlueprint
+                      tables={tables}
+                      statusMap={statusMap}
+                      selectedTables={selectedTargetTables}
+                      onToggleTable={toggleTargetTable}
+                      isTableDisabled={isTableDisabled}
+                      customBadges={customBadges}
+                      compact
+                    />
+                  </BlueprintScaler>
                 </div>
               ) : (
                 <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 max-h-48 overflow-y-auto">

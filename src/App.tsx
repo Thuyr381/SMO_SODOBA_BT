@@ -314,10 +314,10 @@ export default function App() {
   // Track whether an action is currently syncing to GAS
   const [isActionExecuting, setIsActionExecuting] = useState(false);
 
-  // Execute Action from Bottom Bar (Resets to Default Mode after action)
+  // Execute Action from Bottom Bar (Resets to Default Mode after action immediately)
   const handleExecuteBottomAction = async () => {
     const tableIds = Array.from(selectedTables);
-    if (tableIds.length === 0) return;
+    if (tableIds.length === 0 || isActionExecuting) return;
 
     if (actionMode === 'BOOK') {
       // Open Booking form modal
@@ -325,32 +325,32 @@ export default function App() {
       return;
     }
 
+    // Debounce rapid multiple taps (250ms guard only, doesn't lock user for 3-5s)
+    setIsActionExecuting(true);
+    setTimeout(() => setIsActionExecuting(false), 250);
+
     if (actionMode === 'CONFIRM') {
       // Optimistic UI update (<50ms)
       mutateTableStatusOptimistic(tableIds, 'confirmed');
       triggerNotificationHaptic('success');
       showToast('Đã xác nhận đơn', `Bàn ${tableIds.join(', ')} đã chuyển sang trạng thái ĐÃ XÁC NHẬN`, 'success');
       
-      // Return to Default mode
+      // Return to Default mode immediately
       setActionMode(null);
       setSelectedTables(new Set());
-      setIsActionExecuting(true);
 
-      try {
-        await gasApi.sendAction({
-          action: 'UPDATE_STATUS',
-          danh_sach_ban: tableIds,
-          trang_thai: 'ĐÃ XÁC NHẬN',
-          ngay_dat: selectedDate,
-        });
+      gasApi.sendAction({
+        action: 'UPDATE_STATUS',
+        danh_sach_ban: tableIds,
+        trang_thai: 'ĐÃ XÁC NHẬN',
+        ngay_dat: selectedDate,
+      }).then(() => {
         refreshBookingsFromCache();
-      } catch (err) {
+      }).catch((err) => {
         console.error('Lỗi khi xác nhận bàn:', err);
         rollbackStatus();
         showToast('Lỗi đồng bộ', 'Không thể kết nối máy chủ, đã hoàn tác', 'error');
-      } finally {
-        setIsActionExecuting(false);
-      }
+      });
       return;
     }
 
@@ -360,26 +360,22 @@ export default function App() {
       triggerNotificationHaptic('success');
       showToast('Khách đã đến', `Bàn ${tableIds.join(', ')} đã chuyển sang trạng thái ĐÃ ĐẾN`, 'success');
       
-      // Return to Default mode
+      // Return to Default mode immediately
       setActionMode(null);
       setSelectedTables(new Set());
-      setIsActionExecuting(true);
 
-      try {
-        await gasApi.sendAction({
-          action: 'UPDATE_STATUS',
-          danh_sach_ban: tableIds,
-          trang_thai: 'ĐÃ ĐẾN',
-          ngay_dat: selectedDate,
-        });
+      gasApi.sendAction({
+        action: 'UPDATE_STATUS',
+        danh_sach_ban: tableIds,
+        trang_thai: 'ĐÃ ĐẾN',
+        ngay_dat: selectedDate,
+      }).then(() => {
         refreshBookingsFromCache();
-      } catch (err) {
+      }).catch((err) => {
         console.error('Lỗi khi cập nhật khách đã đến:', err);
         rollbackStatus();
         showToast('Lỗi đồng bộ', 'Không thể kết nối máy chủ, đã hoàn tác', 'error');
-      } finally {
-        setIsActionExecuting(false);
-      }
+      });
       return;
     }
 
@@ -389,26 +385,22 @@ export default function App() {
       triggerNotificationHaptic('success');
       showToast('Khách đã về', `Bàn ${tableIds.join(', ')} đã chuyển sang trạng thái ĐÃ VỀ và trả lại BÀN TRỐNG`, 'success');
       
-      // Return to Default mode
+      // Return to Default mode immediately
       setActionMode(null);
       setSelectedTables(new Set());
-      setIsActionExecuting(true);
 
-      try {
-        await gasApi.sendAction({
-          action: 'UPDATE_STATUS',
-          danh_sach_ban: tableIds,
-          trang_thai: 'ĐÃ VỀ',
-          ngay_dat: selectedDate,
-        });
+      gasApi.sendAction({
+        action: 'UPDATE_STATUS',
+        danh_sach_ban: tableIds,
+        trang_thai: 'ĐÃ VỀ',
+        ngay_dat: selectedDate,
+      }).then(() => {
         refreshBookingsFromCache();
-      } catch (err) {
+      }).catch((err) => {
         console.error('Lỗi khi cập nhật khách đã về:', err);
         rollbackStatus();
         showToast('Lỗi đồng bộ', 'Không thể kết nối máy chủ, đã hoàn tác', 'error');
-      } finally {
-        setIsActionExecuting(false);
-      }
+      });
       return;
     }
 
@@ -418,26 +410,22 @@ export default function App() {
       triggerNotificationHaptic('warning');
       showToast('Hủy đặt bàn', `Bàn ${tableIds.join(', ')} đã chuyển về trạng thái TRỐNG`, 'warning');
       
-      // Return to Default mode
+      // Return to Default mode immediately
       setActionMode(null);
       setSelectedTables(new Set());
-      setIsActionExecuting(true);
 
-      try {
-        await gasApi.sendAction({
-          action: 'UPDATE_STATUS',
-          danh_sach_ban: tableIds,
-          trang_thai: 'HỦY',
-          ngay_dat: selectedDate,
-        });
+      gasApi.sendAction({
+        action: 'UPDATE_STATUS',
+        danh_sach_ban: tableIds,
+        trang_thai: 'HỦY',
+        ngay_dat: selectedDate,
+      }).then(() => {
         refreshBookingsFromCache();
-      } catch (err) {
+      }).catch((err) => {
         console.error('Lỗi khi hủy đặt bàn:', err);
         rollbackStatus();
         showToast('Lỗi đồng bộ', 'Không thể kết nối máy chủ, đã hoàn tác', 'error');
-      } finally {
-        setIsActionExecuting(false);
-      }
+      });
       return;
     }
 
@@ -455,61 +443,61 @@ export default function App() {
         'info'
       );
       
-      // Return to Default mode
+      // Return to Default mode immediately
       setActionMode(null);
       setSelectedTables(new Set());
-      setIsActionExecuting(true);
 
-      try {
-        await gasApi.sendAction({
-          action: isCurrentlyInactive ? 'UPDATE_STATUS' : 'LOCK',
-          danh_sach_ban: tableIds,
-          trang_thai: isCurrentlyInactive ? 'HỦY' : undefined,
-          nguoi_nhap: userName,
-          unlock: isCurrentlyInactive,
-          ngay_dat: selectedDate,
-        });
+      gasApi.sendAction({
+        action: isCurrentlyInactive ? 'UPDATE_STATUS' : 'LOCK',
+        danh_sach_ban: tableIds,
+        trang_thai: isCurrentlyInactive ? 'HỦY' : undefined,
+        nguoi_nhap: userName,
+        unlock: isCurrentlyInactive,
+        ngay_dat: selectedDate,
+      }).then(() => {
         refreshBookingsFromCache();
-      } catch (err) {
+      }).catch((err) => {
         console.error('Lỗi khi khóa/mở bàn:', err);
         rollbackStatus();
         showToast('Lỗi đồng bộ', 'Không thể kết nối máy chủ, đã hoàn tác', 'error');
-      } finally {
-        setIsActionExecuting(false);
-      }
+      });
     }
   };
 
-  // Submit Booking Form (Resets to Default Mode after action)
+  // Submit Booking Form (Resets to Default Mode after action immediately)
   const handleBookingSubmit = async (payload: BookingPayload) => {
     const tableIds = payload.danh_sach_ban;
 
-    // 1. Optimistic UI update (<50ms): Chuyển bàn sang màu booked
+    // 1. Optimistic UI update (<50ms): Chuyển bàn sang màu booked ngay lập tức
     mutateTableStatusOptimistic(tableIds, 'booked');
     triggerNotificationHaptic('success');
     
-    // Return to Default mode
+    // Close modal & return to Default mode immediately
+    setIsBookingModalOpen(false);
     setActionMode(null);
     setSelectedTables(new Set());
 
-    try {
-      const res = await gasApi.sendAction<BookingPayload>({
-        action: 'BOOK',
-        ...payload,
-      });
+    showToast(
+      'Đã ghi nhận đặt bàn!',
+      `Đơn cho khách ${payload.ten_khach} (${tableIds.join(', ')}). Đang lưu vào hệ thống...`,
+      'info'
+    );
 
+    gasApi.sendAction<BookingPayload>({
+      action: 'BOOK',
+      ...payload,
+    }).then((res) => {
       showToast(
         'Đặt bàn thành công!',
         `Đã lưu đơn ${res.data?.id_dat || 'S8'} cho khách ${payload.ten_khach} (${tableIds.join(', ')})`,
         'success'
       );
       refreshBookingsFromCache();
-    } catch (err) {
+    }).catch((err) => {
       console.error('Lỗi khi lưu đơn đặt bàn:', err);
       rollbackStatus();
-      showToast('Lỗi đặt bàn', 'Không thể lưu đơn vào hệ thống', 'error');
-      throw err;
-    }
+      showToast('Lỗi đặt bàn', 'Không thể lưu đơn vào hệ thống, đã hoàn tác', 'error');
+    });
   };
 
   // Save Updated Booking (Sửa thông tin khách & đổi bàn)
@@ -535,23 +523,23 @@ export default function App() {
     }
 
     triggerNotificationHaptic('success');
+    setActionMode(null);
+    setSelectedTables(new Set());
+    setEditBooking(null);
 
-    try {
-      await gasApi.updateBooking(updatedBooking);
-      showToast(
-        'Cập nhật thành công!',
-        `Đã lưu thông tin đơn ${updatedBooking.id_dat} (Khách: ${updatedBooking.ten_khach}, Bàn: [${newTables.join(', ')}])`,
-        'success'
-      );
+    showToast(
+      'Cập nhật thành công!',
+      `Đã cập nhật đơn ${updatedBooking.id_dat} (Khách: ${updatedBooking.ten_khach}, Bàn: [${newTables.join(', ')}])`,
+      'success'
+    );
+
+    gasApi.updateBooking(updatedBooking).then(() => {
       refreshBookingsFromCache();
-      setActionMode(null);
-      setSelectedTables(new Set());
-    } catch (err) {
+    }).catch((err) => {
       console.error('Lỗi khi cập nhật đơn đặt bàn:', err);
       rollbackStatus();
-      showToast('Lỗi cập nhật', 'Không thể lưu thay đổi vào hệ thống', 'error');
-      throw err;
-    }
+      showToast('Lỗi cập nhật', 'Không thể lưu thay đổi vào hệ thống, đã hoàn tác', 'error');
+    });
   };
 
   // Execute Move Table (Group Transfer - Kịch bản 1) (Resets to Default Mode after action)
@@ -564,56 +552,54 @@ export default function App() {
     const { booking, oldTables, newTables } = payload;
     const idDat = booking.id_dat || '';
 
-    // 1. Optimistic update
+    // 1. Optimistic update (<50ms)
     mutateTableStatusOptimistic(oldTables, 'empty');
     mutateTableStatusOptimistic(newTables, 'booked');
     triggerNotificationHaptic('success');
 
-    // Return to Default mode
+    // Return to Default mode immediately
     setActionMode(null);
     setSelectedTables(new Set());
+    setMoveTableState({ isOpen: false, booking: null, sourceTableId: '' });
 
-    try {
-      await gasApi.sendAction({
-        action: 'MOVE_TABLE',
-        id_dat: idDat,
-        old_tables: oldTables,
-        new_tables: newTables,
-      });
+    showToast(
+      'Dời bàn thành công!',
+      `Đã dời từ [${oldTables.join(', ')}] sang [${newTables.join(', ')}]`,
+      'success'
+    );
 
-      showToast(
-        'Dời bàn thành công!',
-        `Đã dời từ [${oldTables.join(', ')}] sang [${newTables.join(', ')}]`,
-        'success'
-      );
-
-      // Load updated order items & booking for kitchen ticket
-      const updatedBooking = bookings.find((b) => b.id_dat === idDat) || null;
-      let orderItems: OrderMenuItem[] = [];
-      if (idDat) {
-        try {
-          orderItems = gasApi.getCachedOrderMenus(idDat);
-        } catch (e) {
-          console.error(e);
-        }
+    // Load updated order items & booking for kitchen ticket
+    const updatedBooking = bookings.find((b) => b.id_dat === idDat) || null;
+    let orderItems: OrderMenuItem[] = [];
+    if (idDat) {
+      try {
+        orderItems = gasApi.getCachedOrderMenus(idDat);
+      } catch (e) {
+        console.error(e);
       }
+    }
 
-      // Pop up the Kitchen Slip Modal
-      setKitchenSlipState({
-        isOpen: true,
-        oldTables,
-        newTables,
-        booking: updatedBooking ? { ...updatedBooking, danh_sach_ban: newTables } : { ...booking, danh_sach_ban: newTables },
-        orderItems,
-      });
+    // Pop up the Kitchen Slip Modal immediately
+    setKitchenSlipState({
+      isOpen: true,
+      oldTables,
+      newTables,
+      booking: updatedBooking ? { ...updatedBooking, danh_sach_ban: newTables } : { ...booking, danh_sach_ban: newTables },
+      orderItems,
+    });
 
+    gasApi.sendAction({
+      action: 'MOVE_TABLE',
+      id_dat: idDat,
+      old_tables: oldTables,
+      new_tables: newTables,
+    }).then(() => {
       refreshBookingsFromCache();
-    } catch (err) {
+    }).catch((err) => {
       console.error('Lỗi khi dời bàn:', err);
       rollbackStatus();
       showToast('Lỗi dời bàn', 'Không thể thực hiện dời bàn trên hệ thống', 'error');
-      throw err;
-    }
+    });
   };
 
   // Execute Link Table (Table Linking - Kịch bản 2) (Resets to Default Mode after action)
@@ -621,29 +607,28 @@ export default function App() {
     mutateTableStatusOptimistic(addedTables, 'booked');
     triggerNotificationHaptic('success');
 
-    // Return to Default mode
+    // Return to Default mode immediately
     setActionMode(null);
     setSelectedTables(new Set());
+    setLinkTableState({ isOpen: false, booking: null, currentTableId: '' });
 
-    try {
-      await gasApi.sendAction({
-        action: 'LINK_TABLE',
-        id_dat: idDat,
-        added_tables: addedTables,
-      });
+    showToast(
+      'Gộp/Nối bàn thành công!',
+      `Đã nối thêm bàn [${addedTables.join(', ')}] vào đơn ${idDat}`,
+      'success'
+    );
 
-      showToast(
-        'Gộp/Nối bàn thành công!',
-        `Đã nối thêm bàn [${addedTables.join(', ')}] vào đơn ${idDat}`,
-        'success'
-      );
+    gasApi.sendAction({
+      action: 'LINK_TABLE',
+      id_dat: idDat,
+      added_tables: addedTables,
+    }).then(() => {
       refreshBookingsFromCache();
-    } catch (err) {
+    }).catch((err) => {
       console.error('Lỗi khi nối thêm bàn:', err);
       rollbackStatus();
       showToast('Lỗi', 'Không thể gộp bàn', 'error');
-      throw err;
-    }
+    });
   };
 
   // Update status from Booking List View or Table Detail Modal (Resets to Default Mode after action)
@@ -667,26 +652,25 @@ export default function App() {
       'success'
     );
 
-    // Return to Default mode
+    // Return to Default mode immediately
     setActionMode(null);
     setSelectedTables(new Set());
+    if (inspectTable) {
+      setInspectTable(null);
+    }
 
-    try {
-      await gasApi.sendAction({
-        action: 'UPDATE_STATUS',
-        danh_sach_ban: booking.danh_sach_ban,
-        trang_thai: newStatus,
-        ngay_dat: booking.ngay_dat,
-      });
+    gasApi.sendAction({
+      action: 'UPDATE_STATUS',
+      danh_sach_ban: booking.danh_sach_ban,
+      trang_thai: newStatus,
+      ngay_dat: booking.ngay_dat,
+    }).then(() => {
       refreshBookingsFromCache();
-      if (inspectTable) {
-        setInspectTable(null);
-      }
-    } catch (err) {
+    }).catch((err) => {
       console.error('Lỗi khi cập nhật trạng thái:', err);
       rollbackStatus();
       showToast('Lỗi', 'Không thể cập nhật trạng thái đơn', 'error');
-    }
+    });
   };
 
   // Toggle Lock from Table Detail Modal
@@ -702,24 +686,23 @@ export default function App() {
       'info'
     );
 
-    // Return to Default mode
+    // Return to Default mode immediately
     setActionMode(null);
     setSelectedTables(new Set());
 
-    try {
-      await gasApi.sendAction({
-        action: 'LOCK',
-        danh_sach_ban: [tableId],
-        nguoi_nhap: userName,
-        unlock: isCurrentlyInactive,
-        ngay_dat: selectedDate,
-      });
+    gasApi.sendAction({
+      action: 'LOCK',
+      danh_sach_ban: [tableId],
+      nguoi_nhap: userName,
+      unlock: isCurrentlyInactive,
+      ngay_dat: selectedDate,
+    }).then(() => {
       refreshBookingsFromCache();
-    } catch (err) {
+    }).catch((err) => {
       console.error('Lỗi khóa bàn:', err);
       rollbackStatus();
       showToast('Lỗi', 'Không thể khóa/mở khóa bàn', 'error');
-    }
+    });
   };
 
   // Open Menu Detail View for a booking
@@ -882,6 +865,7 @@ export default function App() {
         booking={editBooking}
         tables={INITIAL_TABLES}
         statusMap={statusMap}
+        bookings={bookings}
         onClose={() => setEditBooking(null)}
         onSave={handleSaveUpdatedBooking}
       />
