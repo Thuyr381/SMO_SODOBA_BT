@@ -1,34 +1,40 @@
 // src/features/floorplan/hooks/useTableMap.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { gasApi } from '../../../services/gasApi';
-import { TableStatusClass } from '../../../types';
+import { BookingPayload, TableStatusClass } from '../../../types';
 
-export function useTableMap(selectedDate?: string) {
-  const [statusMap, setStatusMap] = useState<Record<string, TableStatusClass>>({});
+export function useTableMap(
+  selectedDate?: string,
+  onBookingsSynced?: (bookings: BookingPayload[]) => void
+) {
+  const [statusMap, setStatusMap] = useState<Record<string, TableStatusClass>>(() =>
+    gasApi.getCachedTableStatusMap()
+  );
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
   const previousStatusMapRef = useRef<Record<string, TableStatusClass>>({});
 
   // 1. Fetch dữ liệu từ Google Sheets / Storage theo ngày đã chọn
-  const syncStatus = useCallback(async () => {
+  const syncStatus = useCallback(async (forceRefresh = false) => {
     try {
-      const data = await gasApi.getTableStatusMap(selectedDate);
+      const data = await gasApi.getTableStatusMap(selectedDate, forceRefresh);
       setStatusMap(data as Record<string, TableStatusClass>);
       previousStatusMapRef.current = data as Record<string, TableStatusClass>;
+      onBookingsSynced?.(gasApi.getCachedBookings(selectedDate));
       setLastSyncTime(new Date());
     } catch (err) {
       console.error('Lỗi đồng bộ bảng trạng thái bàn:', err);
     } finally {
       setIsLoading(false);
     }
-  }, [selectedDate]);
+  }, [onBookingsSynced, selectedDate]);
 
   // 2. Polling tự động mỗi 20 giây (Tắt khi tab inactive - Test Case 5)
   useEffect(() => {
-    syncStatus();
+    void syncStatus();
     const interval = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        syncStatus();
+        void syncStatus();
       }
     }, 20000);
     return () => clearInterval(interval);

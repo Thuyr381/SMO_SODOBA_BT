@@ -29,6 +29,8 @@ export const AddMenuDrawer: React.FC<AddMenuDrawerProps> = ({
 
   useEffect(() => {
     if (isOpen) {
+      // Hiển thị cache ngay rồi cập nhật ngầm từ MENU_MON.
+      setMasterList(gasApi.getCachedMasterMenus());
       gasApi.getMasterMenus().then((data) => {
         // Giữ nguyên toàn bộ món (kể cả món INACTIVATE) để làm tối màu & khóa chọn theo yêu cầu
         setMasterList(data);

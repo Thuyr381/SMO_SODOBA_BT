@@ -33,6 +33,7 @@ interface TableDetailModalProps {
   status: TableStatusClass;
   booking: BookingPayload | null;
   orderItems?: OrderMenuItem[];
+  isOrderItemsLoading?: boolean;
   onClose: () => void;
   onOpenBookingModal: (tableId: string) => void;
   onOpenMoveModal: (booking: BookingPayload, tableId: string) => void;
@@ -49,6 +50,7 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
   status,
   booking,
   orderItems = [],
+  isOrderItemsLoading = false,
   onClose,
   onOpenBookingModal,
   onOpenMoveModal,
@@ -242,7 +244,11 @@ export const TableDetailModal: React.FC<TableDetailModalProps> = ({
                     </button>
                   </div>
 
-                  {orderItems.length > 0 ? (
+                  {isOrderItemsLoading && orderItems.length === 0 ? (
+                    <p className="text-xs text-slate-400 py-1 text-center animate-pulse">
+                      Đang đồng bộ món ăn...
+                    </p>
+                  ) : orderItems.length > 0 ? (
                     <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
                       {orderItems.map((item) => (
                         <div

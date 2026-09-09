@@ -18,5 +18,17 @@ export default defineConfig(() => {
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
+    build: {
+      rollupOptions: {
+        output: {
+          // Tách thư viện lớn để trình duyệt tải song song và tái sử dụng cache giữa các lần phát hành.
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom'],
+            'motion-vendor': ['motion/react'],
+            'icons-vendor': ['lucide-react'],
+          },
+        },
+      },
+    },
   };
 });

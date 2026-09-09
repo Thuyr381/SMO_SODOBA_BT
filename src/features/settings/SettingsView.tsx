@@ -29,9 +29,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onRefre
     try {
       const start = Date.now();
       const [statusMap, bookings, datMonItems] = await Promise.all([
-        gasApi.getTableStatusMap(),
-        gasApi.getAllBookings(),
-        gasApi.getAllDatMonMenus(),
+        gasApi.getTableStatusMap(undefined, true),
+        gasApi.getAllBookings(undefined, true),
+        gasApi.getAllDatMonMenus({ forceRefresh: true }),
       ]);
       const elapsed = Date.now() - start;
       const countTables = Object.keys(statusMap).length;

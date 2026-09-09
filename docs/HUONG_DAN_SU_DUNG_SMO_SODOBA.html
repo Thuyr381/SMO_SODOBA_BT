@@ -1,0 +1,480 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hướng dẫn sử dụng SMO SODOBA S8</title>
+  <style>
+    @page { size: A4; margin: 13mm 14mm 15mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #172033;
+      background: #fff;
+      font-family: "DejaVu Sans", Arial, sans-serif;
+      font-size: 10.2pt;
+      line-height: 1.48;
+    }
+    h1, h2, h3, h4 { color: #0f172a; margin-top: 0; page-break-after: avoid; }
+    h1 { font-size: 25pt; line-height: 1.15; }
+    h2 { font-size: 17pt; border-bottom: 2px solid #f59e0b; padding-bottom: 5px; margin-bottom: 12px; }
+    h3 { font-size: 12.5pt; margin: 15px 0 6px; color: #1e3a5f; }
+    h4 { font-size: 10.5pt; margin: 10px 0 4px; }
+    p { margin: 5px 0 9px; }
+    ul, ol { margin: 5px 0 10px 21px; padding: 0; }
+    li { margin: 3px 0; }
+    code { font-family: "DejaVu Sans Mono", monospace; background: #eef2f7; padding: 1px 4px; border-radius: 3px; }
+    .cover {
+      min-height: 268mm;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      page-break-after: always;
+      background: linear-gradient(150deg, #0f172a 0%, #172554 65%, #3b2f0c 100%);
+      color: #fff;
+      margin: -13mm -14mm -15mm;
+      padding: 22mm 18mm;
+    }
+    .cover h1 { color: #fff; margin: 10px 0 8px; }
+    .cover .eyebrow { color: #fbbf24; text-transform: uppercase; letter-spacing: 1.5px; font-weight: 800; }
+    .cover .subtitle { font-size: 13pt; color: #dbeafe; max-width: 160mm; }
+    .cover .meta { margin-top: 14px; color: #cbd5e1; }
+    .cover .score { display: inline-block; margin-top: 16px; padding: 7px 12px; border-radius: 999px; background: #059669; font-weight: 800; color: #fff; }
+    .cover img { width: 100%; max-height: 105mm; object-fit: contain; margin-top: 18px; border: 1px solid #475569; border-radius: 9px; background: #020617; }
+    .page-break { page-break-before: always; }
+    .keep { page-break-inside: avoid; }
+    .toc { columns: 2; column-gap: 22px; }
+    .toc div { break-inside: avoid; margin: 7px 0; padding-bottom: 5px; border-bottom: 1px dotted #cbd5e1; }
+    .toc b { color: #b45309; margin-right: 5px; }
+    .callout { padding: 10px 12px; margin: 10px 0; border-radius: 7px; page-break-inside: avoid; }
+    .note { background: #eff6ff; border-left: 4px solid #2563eb; }
+    .warn { background: #fff7ed; border-left: 4px solid #f97316; }
+    .ok { background: #ecfdf5; border-left: 4px solid #059669; }
+    .danger { background: #fff1f2; border-left: 4px solid #e11d48; }
+    .step { display: flex; gap: 9px; margin: 8px 0; page-break-inside: avoid; }
+    .step-no { flex: 0 0 24px; height: 24px; border-radius: 50%; color: #fff; background: #d97706; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+    .step-body { flex: 1; }
+    .step-body b { color: #0f172a; }
+    figure { margin: 11px 0 15px; page-break-inside: avoid; text-align: center; }
+    figure img { max-width: 100%; max-height: 175mm; object-fit: contain; border: 1px solid #94a3b8; border-radius: 6px; background: #020617; }
+    figcaption { text-align: left; margin-top: 5px; color: #475569; font-size: 8.8pt; font-style: italic; }
+    table { width: 100%; border-collapse: collapse; margin: 8px 0 13px; page-break-inside: auto; }
+    th, td { border: 1px solid #cbd5e1; padding: 5px 6px; vertical-align: top; }
+    th { background: #e2e8f0; color: #0f172a; text-align: left; }
+    tr { page-break-inside: avoid; }
+    .compact th, .compact td { font-size: 8.4pt; padding: 4px 5px; }
+    .status { font-weight: 800; white-space: nowrap; }
+    .yellow { color: #8a5b00; }
+    .red { color: #b91c1c; }
+    .orange { color: #c2410c; }
+    .green { color: #15803d; }
+    .gray { color: #475569; }
+    .pass { color: #047857; font-weight: 800; }
+    .small { font-size: 8.7pt; color: #64748b; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .card { border: 1px solid #cbd5e1; border-radius: 7px; padding: 9px 10px; page-break-inside: avoid; }
+    .card h3 { margin-top: 0; }
+    .kbd { display: inline-block; border: 1px solid #94a3b8; border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: #f8fafc; font-weight: 700; }
+    .footer-note { margin-top: 18px; padding-top: 8px; border-top: 1px solid #cbd5e1; color: #64748b; font-size: 8.5pt; }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <div class="eyebrow">Tài liệu vận hành • S8 Tân Phú</div>
+    <h1>HƯỚNG DẪN SỬ DỤNG<br />SMO SODOBA</h1>
+    <p class="subtitle">Quản lý sơ đồ bàn, đơn đặt bàn, trạng thái phục vụ, thực đơn và kết nối Google Sheets/GAS.</p>
+    <div class="score">✓ Kiểm thử giao diện: 20/20 kịch bản đạt</div>
+    <p class="meta">Phiên bản tài liệu: 1.0<br />Ngày kiểm tra: 08/09/2026<br />Môi trường kiểm tra: Chrome, desktop 1440×1000 và mobile 390×844</p>
+    <img src="screenshots/01-so-do-ban-tong-quan.png" alt="Sơ đồ bàn tổng quan" />
+  </section>
+
+  <section>
+    <h2>Thông tin quan trọng trước khi dùng</h2>
+    <div class="callout ok"><b>Kết quả kiểm tra:</b> build và TypeScript đạt; 20/20 kịch bản giao diện đạt; không ghi nhận lỗi JavaScript làm gián đoạn thao tác.</div>
+    <div class="callout note"><b>Phạm vi kiểm tra:</b> các thao tác ghi dữ liệu được thực hiện trong phiên trình duyệt cô lập bằng <i>Offline Persistence &amp; Local Engine</i>. Dữ liệu kiểm thử không được gửi tới Google Sheet thật.</div>
+    <div class="callout warn"><b>Trước khi vận hành thật:</b> quản trị viên phải nhập URL Google Apps Script Web App thật trong tab <b>Sheet/GAS</b>, nhấn <b>Lưu URL</b> rồi <b>Kiểm tra</b>. Việc tích hợp với Sheet thật chưa thể nghiệm thu khi chưa có URL triển khai và quyền truy cập thực tế.</div>
+    <div class="callout danger"><b>Lưu ý nhỏ:</b> trình duyệt yêu cầu <code>/favicon.ico</code> nhưng server trả về 404. Việc này chỉ làm thiếu biểu tượng tab, không ảnh hưởng chức năng.</div>
+
+    <h3>Mục lục</h3>
+    <div class="toc">
+      <div><b>1.</b> Khởi động nhanh</div>
+      <div><b>2.</b> Làm quen với sơ đồ bàn</div>
+      <div><b>3.</b> Tìm kiếm và xem chi tiết</div>
+      <div><b>4.</b> Tạo đơn đặt bàn</div>
+      <div><b>5.</b> Quản lý đơn và trạng thái</div>
+      <div><b>6.</b> Quản lý thực đơn</div>
+      <div><b>7.</b> Dời, nối và chỉnh sửa bàn</div>
+      <div><b>8.</b> Khóa/mở bàn và kết thúc phục vụ</div>
+      <div><b>9.</b> Kết nối Google Sheets/GAS</div>
+      <div><b>10.</b> Sử dụng trên điện thoại</div>
+      <div><b>11.</b> Xử lý sự cố</div>
+      <div><b>12.</b> Biên bản kiểm thử</div>
+    </div>
+
+    <h3>Vai trò người dùng</h3>
+    <table>
+      <thead><tr><th>Vai trò</th><th>Công việc chính</th><th>Lưu ý</th></tr></thead>
+      <tbody>
+        <tr><td>Lễ tân/điều phối</td><td>Tìm bàn, đặt bàn, xác nhận, ghi nhận khách đến/về, đổi bàn.</td><td>Luôn kiểm tra đúng ngày đang xem.</td></tr>
+        <tr><td>Phục vụ/bếp</td><td>Xem đơn, thêm/sửa số lượng món, nhập ghi chú bếp, xem phiếu dời bàn.</td><td>Kiểm tra mã đơn và số bàn trước khi lưu.</td></tr>
+        <tr><td>Quản trị viên</td><td>Cấu hình GAS, kiểm tra kết nối, reset dữ liệu mẫu.</td><td>Tab Sheet/GAS có mật khẩu bảo vệ.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="page-break">
+    <h2>1. Khởi động nhanh</h2>
+    <h3>1.1 Truy cập ứng dụng</h3>
+    <div class="step"><span class="step-no">1</span><div class="step-body">Mở URL do quản trị viên cung cấp hoặc mở Mini App từ Telegram.</div></div>
+    <div class="step"><span class="step-no">2</span><div class="step-body">Chờ dòng tiêu đề <b>SƠ ĐỒ MẶT BẰNG S8</b> và các ô bàn xuất hiện.</div></div>
+    <div class="step"><span class="step-no">3</span><div class="step-body">Kiểm tra ô ngày ở góc phải. Chọn đúng ngày cần xem trước khi thao tác.</div></div>
+    <div class="step"><span class="step-no">4</span><div class="step-body">Nếu dữ liệu chưa mới, nhấn biểu tượng làm mới cạnh tab <b>Sheet/GAS</b>.</div></div>
+
+    <h3>1.2 Ba khu vực chính</h3>
+    <table>
+      <thead><tr><th>Khu vực</th><th>Mục đích</th></tr></thead>
+      <tbody>
+        <tr><td><b>Sơ đồ</b></td><td>Xem trực quan toàn bộ bàn; đặt, hủy, xác nhận, ghi nhận đến/về và khóa bàn.</td></tr>
+        <tr><td><b>Đơn/Món</b></td><td>Tìm và sửa đơn, chuyển trạng thái, quản lý món đã đặt.</td></tr>
+        <tr><td><b>Sheet/GAS</b></td><td>Cấu hình backend Google Apps Script, kiểm tra dữ liệu và xem hướng dẫn Code.gs.</td></tr>
+      </tbody>
+    </table>
+    <figure>
+      <img src="screenshots/01-so-do-ban-tong-quan.png" alt="Màn hình sơ đồ bàn" />
+      <figcaption>Hình 1 — Màn hình chính gồm tab điều hướng, ngày xem, chú giải màu, thanh thao tác, tìm kiếm và sơ đồ vật lý.</figcaption>
+    </figure>
+  </section>
+
+  <section class="page-break">
+    <h2>2. Làm quen với sơ đồ bàn</h2>
+    <h3>2.1 Ý nghĩa màu trạng thái</h3>
+    <table>
+      <thead><tr><th>Màu</th><th>Trạng thái</th><th>Có thể thao tác</th></tr></thead>
+      <tbody>
+        <tr><td class="status yellow">Vàng</td><td>Trống</td><td>Đặt bàn hoặc khóa bàn.</td></tr>
+        <tr><td class="status red">Đỏ</td><td>Đã đặt</td><td>Xác nhận, ghi nhận đã đến, hủy, xem/sửa đơn, dời/nối bàn.</td></tr>
+        <tr><td class="status orange">Cam</td><td>Đã xác nhận</td><td>Ghi nhận đã đến, hủy, xem/sửa đơn, dời/nối bàn.</td></tr>
+        <tr><td class="status green">Xanh lá</td><td>Đã đến</td><td>Đã về, hủy, xem/sửa đơn, dời/nối bàn.</td></tr>
+        <tr><td class="status gray">Xám đậm</td><td>Khóa/không hoạt động</td><td>Chỉ mở khóa; không thể đặt bàn.</td></tr>
+      </tbody>
+    </table>
+    <h3>2.2 Đọc sơ đồ</h3>
+    <ul>
+      <li><b>Khu vực Xanh:</b> nhóm bàn sân vườn 51–64.</li>
+      <li><b>Khu vực Trệt:</b> các dãy bàn chính, sân khấu, lối đi và khu vệ sinh.</li>
+      <li><b>VIP lầu 1:</b> các phòng VIP70, VIP72, VIP74, VIP76.</li>
+      <li><b>Lầu 2A/VIP1 và Lầu 2B/VIP2:</b> khu vực lớn cho nhóm đông/sự kiện.</li>
+    </ul>
+    <h3>2.3 Thu phóng</h3>
+    <ul>
+      <li><b>Vừa khung hình:</b> tự cân sơ đồ theo màn hình hiện tại.</li>
+      <li>Nút <b>−</b>/<b>+</b>: thu nhỏ/phóng to.</li>
+      <li>Nút phần trăm: trở về kích thước chuẩn 100%.</li>
+    </ul>
+    <div class="callout note">Khi một chế độ thao tác đang bật, các bàn không hợp lệ sẽ bị làm mờ và không bấm được. Đây là cơ chế ngăn thao tác sai trạng thái.</div>
+  </section>
+
+  <section class="page-break">
+    <h2>3. Tìm kiếm và xem chi tiết</h2>
+    <h3>3.1 Tìm nhanh</h3>
+    <div class="step"><span class="step-no">1</span><div class="step-body">Chạm ô <b>Tìm bàn</b> phía trên sơ đồ.</div></div>
+    <div class="step"><span class="step-no">2</span><div class="step-body">Nhập một trong các giá trị: tên khách, 3 số cuối điện thoại, mã đơn hoặc số bàn.</div></div>
+    <div class="step"><span class="step-no">3</span><div class="step-body">Chọn kết quả khách để mở chi tiết đơn; chọn kết quả bàn để làm nổi bật vị trí trên sơ đồ.</div></div>
+    <figure>
+      <img src="screenshots/02-tim-kiem-khach-hang.png" alt="Tìm kiếm khách hàng" />
+      <figcaption>Hình 2 — Ví dụ tìm theo tên khách. Kết quả hiển thị số điện thoại, giờ, số khách, nhóm bàn và mã đơn.</figcaption>
+    </figure>
+
+    <h3>3.2 Xem chi tiết bàn</h3>
+    <p>Khi không bật chế độ thao tác nào, chạm trực tiếp vào một bàn để mở thông tin chi tiết. Với bàn đã có khách, màn hình cho biết đại diện khách, điện thoại, số khách, tiền cọc, ghi chú, món đặt trước và các thao tác dời/nối bàn.</p>
+    <figure>
+      <img src="screenshots/03-chi-tiet-ban-da-dat.png" alt="Chi tiết bàn đã đặt" />
+      <figcaption>Hình 3 — Chi tiết bàn đã đặt. Đối chiếu tên khách, mã đơn và số bàn trước khi đổi trạng thái.</figcaption>
+    </figure>
+  </section>
+
+  <section class="page-break">
+    <h2>4. Tạo đơn đặt bàn</h2>
+    <h3>4.1 Chọn bàn</h3>
+    <div class="step"><span class="step-no">1</span><div class="step-body">Tại tab <b>Sơ đồ</b>, nhấn <b>ĐẶT BÀN</b>.</div></div>
+    <div class="step"><span class="step-no">2</span><div class="step-body">Chạm một hoặc nhiều bàn màu vàng. Bàn được chọn có viền đỏ và dấu kiểm.</div></div>
+    <div class="step"><span class="step-no">3</span><div class="step-body">Kiểm tra danh sách bàn ở thanh dưới cùng rồi nhấn <b>TIẾP TỤC ĐẶT BÀN</b>.</div></div>
+    <figure>
+      <img src="screenshots/04-chon-ban-trong.png" alt="Chọn bàn trống" />
+      <figcaption>Hình 4 — Chọn bàn trống. Có thể nhấn “Bỏ chọn” để làm lại trước khi tiếp tục.</figcaption>
+    </figure>
+
+    <h3>4.2 Điền thông tin đơn</h3>
+    <table>
+      <thead><tr><th>Trường</th><th>Yêu cầu</th><th>Ví dụ/Lưu ý</th></tr></thead>
+      <tbody>
+        <tr><td>Tên khách hàng</td><td>Bắt buộc</td><td>Nhập tên dễ nhận diện.</td></tr>
+        <tr><td>Số điện thoại</td><td>Bắt buộc, 10 số</td><td>Ví dụ: 0901234567.</td></tr>
+        <tr><td>Ngày/giờ đặt</td><td>Bắt buộc</td><td>Có các nút giờ nhanh cho ca trưa và ca tối.</td></tr>
+        <tr><td>Số lượng khách</td><td>Tối thiểu 1</td><td>Dùng nút −/+ hoặc nhập trực tiếp.</td></tr>
+        <tr><td>Tiền cọc</td><td>Không bắt buộc</td><td>Có mức nhanh 0, 100.000, 200.000, 500.000, 1.000.000 đồng.</td></tr>
+        <tr><td>Ghi chú</td><td>Khuyến nghị</td><td>Ghế trẻ em, ăn chay, sinh nhật, gần sân khấu...</td></tr>
+        <tr><td>Người nhập</td><td>Tự điền</td><td>Lấy từ Telegram nếu có; vẫn có thể chỉnh.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout warn">Kiểm tra kỹ <b>ngày, giờ, bàn và số điện thoại</b> trước khi lưu. Form sẽ chặn nếu thiếu tên/điện thoại hoặc điện thoại không đủ định dạng 10 số.</div>
+  </section>
+
+  <section class="page-break">
+    <h2>4. Tạo đơn đặt bàn (tiếp)</h2>
+    <figure>
+      <img src="screenshots/05-form-dat-ban-da-dien.png" alt="Form đặt bàn" />
+      <figcaption>Hình 5 — Form đã điền. Nhấn “XÁC NHẬN ĐẶT BÀN (S8)” để lưu.</figcaption>
+    </figure>
+    <h3>4.3 Sau khi lưu</h3>
+    <ul>
+      <li>Ứng dụng báo <b>Đặt bàn thành công</b>.</li>
+      <li>Bàn chuyển từ vàng sang đỏ và hiển thị tên khách.</li>
+      <li>Đơn xuất hiện trong tab <b>Đơn/Món</b>.</li>
+      <li>Nếu đã kết nối GAS thật, ứng dụng gửi dữ liệu về backend; nếu chưa, dữ liệu được lưu trong Local Engine của trình duyệt.</li>
+    </ul>
+    <h3>4.4 Cách khác để đặt một bàn</h3>
+    <ol>
+      <li>Tắt mọi chế độ thao tác.</li>
+      <li>Chạm bàn màu vàng.</li>
+      <li>Trong hộp chi tiết bàn trống, chọn <b>ĐẶT BÀN NÀY NGAY</b>.</li>
+      <li>Điền và xác nhận form như trên.</li>
+    </ol>
+  </section>
+
+  <section class="page-break">
+    <h2>5. Quản lý đơn và trạng thái</h2>
+    <h3>5.1 Tìm và lọc đơn</h3>
+    <p>Mở tab <b>Đơn/Món</b>. Có thể tìm theo tên, điện thoại, mã đơn hoặc bàn; lọc theo tất cả/hôm nay/ngày cụ thể; và lọc trạng thái.</p>
+    <figure>
+      <img src="screenshots/06-danh-sach-don-mon.png" alt="Danh sách đơn và món" />
+      <figcaption>Hình 6 — Mỗi thẻ đơn có mã đơn, trạng thái, thời gian, bàn, khách, cọc, số món, ghi chú và nhóm nút thao tác.</figcaption>
+    </figure>
+    <h3>5.2 Chuyển trạng thái đúng quy trình</h3>
+    <table>
+      <thead><tr><th>Tình huống</th><th>Thao tác</th><th>Kết quả</th></tr></thead>
+      <tbody>
+        <tr><td>Khách xác nhận sẽ đến</td><td>Nhấn <b>Xác nhận</b></td><td>Đơn/bàn chuyển sang cam.</td></tr>
+        <tr><td>Khách có mặt</td><td>Nhấn <b>Đã đến</b></td><td>Đơn/bàn chuyển sang xanh lá.</td></tr>
+        <tr><td>Khách không dùng đơn</td><td>Nhấn <b>Hủy</b></td><td>Đơn bị loại khỏi danh sách hoạt động; bàn được giải phóng.</td></tr>
+        <tr><td>Khách ăn xong và rời đi</td><td>Từ sơ đồ/chi tiết, nhấn <b>Đã về</b></td><td>Bàn trở lại trạng thái trống.</td></tr>
+      </tbody>
+    </table>
+    <div class="callout danger"><b>Không nhầm Hủy và Đã về:</b> “Hủy” dành cho đơn không tiếp tục; “Đã về” chỉ dùng khi khách đang ở trạng thái Đã đến và đã kết thúc phục vụ.</div>
+  </section>
+
+  <section class="page-break">
+    <h2>6. Quản lý thực đơn</h2>
+    <h3>6.1 Mở chi tiết món</h3>
+    <ol>
+      <li>Mở tab <b>Đơn/Món</b>.</li>
+      <li>Tìm đúng đơn và nhấn <b>Xem món</b> hoặc <b>+ Đặt món vào DATMON</b>.</li>
+      <li>Kiểm tra mã đơn, khách, bàn và tổng tiền ở đầu trang.</li>
+    </ol>
+    <figure>
+      <img src="screenshots/07-chi-tiet-thuc-don.png" alt="Chi tiết thực đơn" />
+      <figcaption>Hình 7 — Trang quản lý món. Có thể tăng/giảm số lượng, nhập số lượng chính xác, sửa hoặc xóa mềm món.</figcaption>
+    </figure>
+    <h3>6.2 Sửa món hiện có</h3>
+    <ul>
+      <li>Nhấn <b>−</b>/<b>+</b> để giảm/tăng một phần.</li>
+      <li>Nhập trực tiếp số lượng và nhấn Enter hoặc chạm ra ngoài để lưu.</li>
+      <li>Nhấn biểu tượng sửa để đổi tên, số lượng hoặc ghi chú.</li>
+      <li>Nhấn biểu tượng thùng rác, kiểm tra lại tên món rồi xác nhận. Đây là <b>xóa mềm</b>; dữ liệu được chuyển trạng thái thay vì mất hoàn toàn.</li>
+    </ul>
+  </section>
+
+  <section class="page-break">
+    <h2>6. Quản lý thực đơn (tiếp)</h2>
+    <h3>6.3 Thêm món mới</h3>
+    <div class="step"><span class="step-no">1</span><div class="step-body">Nhấn <b>+ THÊM MÓN</b>.</div></div>
+    <div class="step"><span class="step-no">2</span><div class="step-body">Tìm theo tên món hoặc chọn danh mục. Món đang tạm ngưng bị làm mờ và không thể chọn.</div></div>
+    <div class="step"><span class="step-no">3</span><div class="step-body">Dùng <b>+</b>, <b>+5</b>, <b>+10</b> hoặc nhập trực tiếp số lượng.</div></div>
+    <div class="step"><span class="step-no">4</span><div class="step-body">Nhập ghi chú bếp hoặc chọn thẻ nhanh như “Không cay”, “Ít cay”, “Chín kỹ”, “Không hành”, “Nấu trước”.</div></div>
+    <div class="step"><span class="step-no">5</span><div class="step-body">Đối chiếu tổng số món và tổng tiền ở thanh dưới rồi nhấn <b>XÁC NHẬN THÊM MÓN</b>.</div></div>
+    <figure>
+      <img src="screenshots/08-chon-mon-va-ghi-chu-bep.png" alt="Chọn món và ghi chú bếp" />
+      <figcaption>Hình 8 — Ngăn chọn món. Ví dụ đã chọn 1 phần lẩu và nhập ghi chú “Ít cay”.</figcaption>
+    </figure>
+    <div class="callout warn">Nếu đặt nhiều phần, ưu tiên nhập trực tiếp hoặc nút +5/+10; luôn kiểm tra tổng tiền trước khi xác nhận.</div>
+  </section>
+
+  <section class="page-break">
+    <h2>7. Dời, nối và chỉnh sửa bàn</h2>
+    <div class="two-col">
+      <div class="card">
+        <h3>Dời toàn bộ nhóm bàn</h3>
+        <ol>
+          <li>Tắt chế độ thao tác và chạm một bàn của đơn.</li>
+          <li>Chọn <b>DỜI BÀN (Group Transfer)</b>.</li>
+          <li>Kiểm tra nhóm bàn nguồn được nhận diện tự động.</li>
+          <li>Chọn một hoặc nhiều bàn đích màu vàng.</li>
+          <li>Nhấn <b>XÁC NHẬN DỜI</b>.</li>
+          <li>Kiểm tra phiếu báo Bếp/Bar; có thể in phiếu.</li>
+        </ol>
+        <p class="small">Toàn bộ bàn nguồn được giải phóng; thực đơn đi theo đơn sang nhóm bàn mới.</p>
+      </div>
+      <div class="card">
+        <h3>Gộp/nối thêm bàn</h3>
+        <ol>
+          <li>Mở chi tiết một bàn của đơn.</li>
+          <li>Chọn <b>GỘP / NỐI THÊM BÀN</b>.</li>
+          <li>Kiểm tra nhóm bàn hiện tại.</li>
+          <li>Chọn các bàn trống cần nối.</li>
+          <li>Nhấn <b>XÁC NHẬN NỐI BÀN</b>.</li>
+        </ol>
+        <p class="small">Bàn cũ vẫn giữ nguyên; bàn nối thêm nhận cùng trạng thái và cùng đơn.</p>
+      </div>
+    </div>
+    <h3>7.1 Sửa thông tin khách và đổi bàn</h3>
+    <ol>
+      <li>Trong tab <b>Đơn/Món</b>, nhấn <b>Sửa</b> trên thẻ đơn; hoặc chọn <b>Sửa thông tin</b> từ chi tiết bàn.</li>
+      <li>Chỉnh tên, số điện thoại, ngày/giờ, số khách, cọc, trạng thái hoặc ghi chú.</li>
+      <li>Tại phần bàn gán, giữ/bỏ bàn hiện tại và chọn thêm bàn trống.</li>
+      <li>Kiểm tra phải còn ít nhất một bàn, sau đó nhấn <b>LƯU THAY ĐỔI</b>.</li>
+    </ol>
+    <div class="callout note"><b>Quy tắc nhóm bàn:</b> khi một đơn gắn nhiều bàn, thao tác trạng thái từ một bàn có thể tự chọn toàn bộ nhóm để giữ dữ liệu nhất quán.</div>
+
+    <h2 style="margin-top:18px">8. Khóa/mở bàn và kết thúc phục vụ</h2>
+    <h3>8.1 Khóa hoặc mở khóa</h3>
+    <ol>
+      <li>Nhấn <b>KHÓA/MỞ</b> trên thanh thao tác.</li>
+      <li>Chọn bàn trống để khóa hoặc bàn xám để mở khóa.</li>
+      <li>Kiểm tra thanh dưới cùng và xác nhận.</li>
+    </ol>
+    <h3>8.2 Ghi nhận khách đã về</h3>
+    <ol>
+      <li>Chỉ chọn bàn đang xanh lá/Đã đến.</li>
+      <li>Nhấn <b>ĐÃ VỀ</b>, chọn bàn/nhóm bàn rồi xác nhận.</li>
+      <li>Kiểm tra bàn trở lại màu vàng.</li>
+    </ol>
+  </section>
+
+  <section class="page-break">
+    <h2>9. Kết nối Google Sheets/GAS</h2>
+    <h3>9.1 Mở khóa trang cấu hình</h3>
+    <ol>
+      <li>Nhấn tab <b>Sheet/GAS</b>.</li>
+      <li>Nhập mật khẩu cấu hình: <code>smo_vungmanh</code>.</li>
+      <li>Nhấn <b>MỞ KHÓA TRUY CẬP</b>.</li>
+    </ol>
+    <figure>
+      <img src="screenshots/09-xac-thuc-tab-sheet-gas.png" alt="Xác thực trang GAS" />
+      <figcaption>Hình 9 — Hộp xác thực bảo vệ trang cấu hình. Dùng biểu tượng con mắt nếu cần kiểm tra ký tự vừa nhập.</figcaption>
+    </figure>
+    <div class="callout danger"><b>Bảo mật:</b> mật khẩu hiện được đặt trực tiếp trong mã phía trình duyệt nên chỉ là lớp ngăn thao tác nhầm, không phải cơ chế bảo mật cấp máy chủ. Không công khai URL cấu hình và nên bổ sung xác thực phía backend khi đưa lên Internet.</div>
+  </section>
+
+  <section class="page-break">
+    <h2>9. Kết nối Google Sheets/GAS (tiếp)</h2>
+    <h3>9.2 Lưu URL Web App</h3>
+    <div class="step"><span class="step-no">1</span><div class="step-body">Dán URL có dạng <code>https://script.google.com/macros/s/.../exec</code> vào ô URL.</div></div>
+    <div class="step"><span class="step-no">2</span><div class="step-body">Nhấn <b>Lưu URL</b>.</div></div>
+    <div class="step"><span class="step-no">3</span><div class="step-body">Nhấn <b>Kiểm tra</b>. Kết quả phải đọc được sơ đồ bàn, số đơn DATBAN và số dòng món DATMON.</div></div>
+    <div class="step"><span class="step-no">4</span><div class="step-body">Nếu dữ liệu từ n8n không lên đúng, nhấn <b>Soi luồng n8n</b> để xem ngày thô, bàn thô và kết quả chuẩn hóa.</div></div>
+    <figure>
+      <img src="screenshots/10-cau-hinh-va-kiem-tra-ket-noi.png" alt="Trang cấu hình GAS" />
+      <figcaption>Hình 10 — Kết quả kiểm tra thành công trong Local Engine. Khi dùng GAS thật, cần đối chiếu số bàn/đơn/món với Google Sheet.</figcaption>
+    </figure>
+    <h3>9.3 Triển khai Code.gs</h3>
+    <ol>
+      <li>Mở Google Sheet → <b>Extensions</b> → <b>Apps Script</b>.</li>
+      <li>Tại trang Sheet/GAS trong ứng dụng, mở phần <b>Xem mã Code.gs</b> và sao chép mã.</li>
+      <li>Dán vào Apps Script, lưu và triển khai dạng <b>Web app</b>.</li>
+      <li>Cấp quyền truy cập phù hợp với mô hình vận hành.</li>
+      <li>Sao chép URL <code>/exec</code> mới và lưu vào ứng dụng.</li>
+    </ol>
+    <div class="callout warn">Nút <b>Reset dữ liệu mẫu</b> phục hồi Local Engine. Không dùng nút này như một thao tác xử lý dữ liệu sản xuất trên Google Sheet.</div>
+  </section>
+
+  <section class="page-break">
+    <h2>10. Sử dụng trên điện thoại</h2>
+    <figure>
+      <img src="screenshots/11-giao-dien-dien-thoai.png" alt="Giao diện điện thoại" />
+      <figcaption>Hình 11 — Giao diện ở kích thước 390×844. Sơ đồ vừa chiều ngang và không phát sinh tràn ngang.</figcaption>
+    </figure>
+    <h3>Mẹo thao tác nhanh</h3>
+    <ul>
+      <li>Dùng <b>Vừa khung hình</b> để nhìn toàn bộ sơ đồ.</li>
+      <li>Chạm chính giữa ô bàn; bàn hợp lệ sẽ hiện viền/dấu kiểm.</li>
+      <li>Khi thanh xác nhận xuất hiện ở dưới, cuộn đến vùng cần thiết nhưng không đổi tab trước khi xác nhận.</li>
+      <li>Trong drawer chọn món, cuộn danh sách ở giữa; thanh tổng tiền luôn nằm phía dưới.</li>
+      <li>Nếu bàn quá nhỏ, phóng to bằng nút <b>+</b> rồi thu lại sau khi chọn.</li>
+    </ul>
+
+    <h3>Quy trình khuyến nghị cho lễ tân</h3>
+    <ol>
+      <li>Chọn đúng ngày.</li>
+      <li>Tìm khách trước để tránh tạo trùng.</li>
+      <li>Chọn bàn trống → nhập đủ tên, điện thoại, giờ và số khách.</li>
+      <li>Đọc lại tên khách và bàn trước khi xác nhận.</li>
+      <li>Khi khách gọi lại, chuyển <b>Xác nhận</b>; khi đến, chuyển <b>Đã đến</b>.</li>
+      <li>Khi kết thúc, dùng <b>Đã về</b> để giải phóng bàn.</li>
+    </ol>
+  </section>
+
+  <section class="page-break">
+    <h2>11. Xử lý sự cố</h2>
+    <table>
+      <thead><tr><th>Hiện tượng</th><th>Nguyên nhân thường gặp</th><th>Cách xử lý</th></tr></thead>
+      <tbody>
+        <tr><td>Không thấy đơn vừa tạo</td><td>Đang xem sai ngày hoặc bộ lọc chưa đúng.</td><td>Chọn đúng ngày, xóa từ khóa, chọn Tất cả trạng thái, nhấn đồng bộ.</td></tr>
+        <tr><td>Không chọn được bàn</td><td>Bàn không phù hợp chế độ đang bật.</td><td>Tắt chế độ, kiểm tra màu bàn rồi bật đúng thao tác.</td></tr>
+        <tr><td>Không dùng được Đã về</td><td>Bàn chưa ở trạng thái Đã đến.</td><td>Chuyển đơn sang Đã đến trước.</td></tr>
+        <tr><td>Không thêm được món</td><td>Chưa chọn số lượng hoặc món đang tạm ngưng.</td><td>Chọn món hoạt động, đặt số lượng ≥ 1.</td></tr>
+        <tr><td>Kiểm tra GAS không đúng số liệu</td><td>URL sai/cũ, Web App chưa cấp quyền, dữ liệu sai tab/cột.</td><td>Triển khai lại, dùng URL /exec mới, kiểm tra quyền, chạy Soi luồng n8n.</td></tr>
+        <tr><td>Dữ liệu chỉ có trên máy đang dùng</td><td>Ứng dụng vẫn ở Local Engine.</td><td>Nhập URL GAS thật và kiểm tra lại kết nối.</td></tr>
+        <tr><td>Thiếu biểu tượng tab</td><td><code>/favicon.ico</code> trả về 404.</td><td>Không ảnh hưởng chức năng; thêm favicon khi hoàn thiện triển khai.</td></tr>
+        <tr><td>Giao diện chưa cập nhật</td><td>Dữ liệu cache/chưa đồng bộ.</td><td>Nhấn nút làm mới; kiểm tra mạng và trạng thái GAS.</td></tr>
+      </tbody>
+    </table>
+    <h3>Thông tin cần gửi khi báo lỗi</h3>
+    <ul>
+      <li>Ngày/giờ xảy ra lỗi và ngày đang chọn trên ứng dụng.</li>
+      <li>Mã đơn, tên khách, số bàn và thao tác vừa thực hiện.</li>
+      <li>Ảnh chụp toàn màn hình kèm thông báo lỗi.</li>
+      <li>Kết quả nút <b>Kiểm tra</b> hoặc <b>Soi luồng n8n</b> nếu liên quan dữ liệu.</li>
+    </ul>
+  </section>
+
+  <section class="page-break">
+    <h2>12. Biên bản kiểm thử giao diện</h2>
+    <p><b>Ngày thực hiện:</b> 08/09/2026 • <b>Trình duyệt:</b> Google Chrome headless • <b>Dữ liệu:</b> Local Engine trong context cô lập.</p>
+    <table class="compact">
+      <thead><tr><th>Mã</th><th>Kịch bản</th><th>Kết quả xác nhận</th><th>Trạng thái</th></tr></thead>
+      <tbody>
+        <tr><td>MT-01</td><td>Mở ứng dụng</td><td>Hiển thị sơ đồ, điều hướng và chú giải.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-02</td><td>Trạng thái mẫu</td><td>Đặt/Xác nhận/Đến/Khóa hiển thị đúng.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-03</td><td>Tìm theo tên khách</td><td>Đúng khách và nhóm bàn 56, 57.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-04</td><td>Chi tiết bàn đã đặt</td><td>Đúng khách, điện thoại và đơn.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-05</td><td>Chọn bàn trống</td><td>Bàn 10 được chọn; thanh xác nhận xuất hiện.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-06</td><td>Trường bắt buộc</td><td>Chặn form thiếu tên/điện thoại.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-07</td><td>Điện thoại sai</td><td>Chặn số không đúng định dạng 10 số.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-08</td><td>Tạo đơn</td><td>Đơn tạo thành công; bàn 10 chuyển Đã đặt.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-09</td><td>Tra cứu đơn</td><td>Tìm thấy đúng đơn vừa tạo.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-10</td><td>Xác nhận đơn</td><td>Trạng thái đơn/bàn cập nhật đồng bộ.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-11</td><td>Khách đã đến</td><td>Đơn chuyển Đã đến thành công.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-12</td><td>Xem thực đơn</td><td>Đúng món, số lượng, ghi chú, tổng tiền.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-13</td><td>Tăng số lượng món</td><td>Tăng từ 2 lên 3.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-14</td><td>Chọn món/ghi chú</td><td>Nút xác nhận bật sau khi chọn.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-15</td><td>Thêm món</td><td>Món và ghi chú lưu vào Local Engine.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-16</td><td>Mật khẩu GAS sai</td><td>Trang cấu hình vẫn bị khóa.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-17</td><td>Mật khẩu GAS đúng</td><td>Mở được trang cấu hình.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-18</td><td>Kiểm tra Local Engine</td><td>Đọc được bàn, DATBAN và DATMON.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-19</td><td>Màn hình điện thoại</td><td>Không tràn ngang ở 390×844.</td><td class="pass">PASS</td></tr>
+        <tr><td>MT-20</td><td>Lỗi JavaScript</td><td>Không ghi nhận pageerror.</td><td class="pass">PASS</td></tr>
+      </tbody>
+    </table>
+    <div class="callout ok"><b>Kết luận:</b> các luồng giao diện và Local Engine đủ điều kiện sử dụng thử. Trước khi đưa vào vận hành sản xuất, cần chạy thêm kiểm thử tích hợp với URL GAS thật và dữ liệu Google Sheet thật.</div>
+    <h3>Kiểm thử tích hợp cần thực hiện khi có GAS thật</h3>
+    <ul>
+      <li>Tạo một đơn thử và xác nhận có dòng mới đúng 15 cột trong DATBAN.</li>
+      <li>Thêm/sửa/xóa mềm món và đối chiếu DATMON.</li>
+      <li>Dời/nối nhóm bàn và kiểm tra trạng thái từng bàn sau đồng bộ.</li>
+      <li>Thử hai thiết bị đồng thời để xác nhận polling và nhất quán dữ liệu.</li>
+      <li>Kiểm tra quyền Web App, thời gian phản hồi và xử lý khi mất mạng.</li>
+    </ul>
+    <p class="footer-note">Tệp kết quả chi tiết: <code>docs/manual-test-results.json</code> • Ảnh gốc: <code>docs/screenshots/</code> • Script tái kiểm thử: <code>scripts/manual-test.mjs</code>.</p>
+  </section>
+</body>
+</html>

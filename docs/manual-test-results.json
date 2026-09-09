@@ -1,0 +1,140 @@
+{
+  "executedAt": "2026-09-09T06:25:22.929Z",
+  "baseUrl": "http://127.0.0.1:3011/",
+  "environment": {
+    "browser": "Google Chrome headless",
+    "viewportDesktop": "1440x1000",
+    "viewportMobile": "390x844",
+    "backendMode": "Offline Persistence & Local Engine (dữ liệu trình duyệt cô lập)"
+  },
+  "summary": {
+    "total": 20,
+    "passed": 20,
+    "failed": 0
+  },
+  "results": [
+    {
+      "id": "MT-01",
+      "name": "Mở ứng dụng và hiển thị sơ đồ",
+      "status": "PASS",
+      "detail": "Sơ đồ, thanh điều hướng và chú giải trạng thái hiển thị."
+    },
+    {
+      "id": "MT-02",
+      "name": "Hiển thị đúng trạng thái dữ liệu mẫu",
+      "status": "PASS",
+      "detail": "Bàn 56: Đã đặt; VIP70: Xác nhận; bàn 44: Đã đến; bàn 12: Khóa."
+    },
+    {
+      "id": "MT-03",
+      "name": "Tìm kiếm theo tên khách",
+      "status": "PASS",
+      "detail": "Tìm thấy đúng khách và nhóm bàn 56, 57."
+    },
+    {
+      "id": "MT-04",
+      "name": "Xem chi tiết bàn đã đặt",
+      "status": "PASS",
+      "detail": "Hiện đúng khách đại diện, số điện thoại và thông tin đơn."
+    },
+    {
+      "id": "MT-05",
+      "name": "Chọn bàn trống để đặt",
+      "status": "PASS",
+      "detail": "Bàn 10 được chọn và thanh xác nhận xuất hiện."
+    },
+    {
+      "id": "MT-06",
+      "name": "Kiểm tra dữ liệu bắt buộc khi đặt bàn",
+      "status": "PASS",
+      "detail": "Form chặn gửi khi thiếu tên và số điện thoại."
+    },
+    {
+      "id": "MT-07",
+      "name": "Kiểm tra định dạng số điện thoại",
+      "status": "PASS",
+      "detail": "Số điện thoại sai định dạng bị từ chối."
+    },
+    {
+      "id": "MT-08",
+      "name": "Tạo đơn đặt bàn",
+      "status": "PASS",
+      "detail": "Tạo đơn thành công và bàn 10 chuyển sang Đã đặt."
+    },
+    {
+      "id": "MT-09",
+      "name": "Tra cứu đơn trong tab Đơn/Món",
+      "status": "PASS",
+      "detail": "Tìm thấy đúng đơn vừa tạo theo tên khách."
+    },
+    {
+      "id": "MT-10",
+      "name": "Chuyển trạng thái đơn sang Đã xác nhận",
+      "status": "PASS",
+      "detail": "Trạng thái đơn và bàn được cập nhật đồng bộ."
+    },
+    {
+      "id": "MT-11",
+      "name": "Chuyển trạng thái đơn sang Đã đến",
+      "status": "PASS",
+      "detail": "Đơn chuyển sang Đã đến thành công."
+    },
+    {
+      "id": "MT-12",
+      "name": "Xem thực đơn của đơn",
+      "status": "PASS",
+      "detail": "Hiển thị món, số lượng, ghi chú và tổng tiền."
+    },
+    {
+      "id": "MT-13",
+      "name": "Tăng nhanh số lượng món",
+      "status": "PASS",
+      "detail": "Số lượng tăng từ 2 lên 3."
+    },
+    {
+      "id": "MT-14",
+      "name": "Chọn món và nhập ghi chú bếp",
+      "status": "PASS",
+      "detail": "Chọn 1 món, nhập ghi chú và nút xác nhận được bật."
+    },
+    {
+      "id": "MT-15",
+      "name": "Thêm món vào đơn",
+      "status": "PASS",
+      "detail": "Món mới được lưu vào Local Engine cùng ghi chú bếp."
+    },
+    {
+      "id": "MT-16",
+      "name": "Từ chối mật khẩu Sheet/GAS sai",
+      "status": "PASS",
+      "detail": "Tab cấu hình vẫn bị khóa khi nhập sai mật khẩu."
+    },
+    {
+      "id": "MT-17",
+      "name": "Mở khóa tab Sheet/GAS",
+      "status": "PASS",
+      "detail": "Mật khẩu hợp lệ mở trang cấu hình."
+    },
+    {
+      "id": "MT-18",
+      "name": "Kiểm tra kết nối Local Engine",
+      "status": "PASS",
+      "detail": "Đọc được dữ liệu bàn, DATBAN và DATMON trong chế độ demo."
+    },
+    {
+      "id": "MT-19",
+      "name": "Hiển thị trên màn hình điện thoại",
+      "status": "PASS",
+      "detail": "Không tràn ngang (390px / viewport 390px)."
+    },
+    {
+      "id": "MT-20",
+      "name": "Không có lỗi JavaScript nghiêm trọng",
+      "status": "PASS",
+      "detail": "Không ghi nhận pageerror."
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "httpErrors": []
+}

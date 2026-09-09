@@ -20,19 +20,23 @@ export const MenuDetailView: React.FC<MenuDetailViewProps> = ({
   onBack,
   onShowToast,
 }) => {
-  const [menuItems, setMenuItems] = useState<OrderMenuItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [menuItems, setMenuItems] = useState<OrderMenuItem[]>(() =>
+    booking.id_dat ? gasApi.getCachedOrderMenus(booking.id_dat) : []
+  );
+  const [isLoading, setIsLoading] = useState(() =>
+    booking.id_dat ? gasApi.getCachedOrderMenus(booking.id_dat).length === 0 : false
+  );
   const [isAddDrawerOpen, setIsAddDrawerOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<OrderMenuItem | null>(null);
   const [deletingItem, setDeletingItem] = useState<OrderMenuItem | null>(null);
 
   // Fetch active menu items for this booking
-  const loadMenus = useCallback(async () => {
+  const loadMenus = useCallback(async (forceRefresh = false) => {
     if (!booking.id_dat) return;
     setIsLoading(true);
     try {
       // Dùng getOrderMenus an toàn qua GET request, không bao giờ tạo nhầm đơn bên DATBAN
-      const items = await gasApi.getOrderMenus(booking.id_dat);
+      const items = await gasApi.getOrderMenus(booking.id_dat, forceRefresh);
       setMenuItems(items || []);
     } catch (err) {
       console.error('Lỗi khi tải danh sách món:', err);
@@ -42,7 +46,10 @@ export const MenuDetailView: React.FC<MenuDetailViewProps> = ({
   }, [booking.id_dat]);
 
   useEffect(() => {
-    loadMenus();
+    if (booking.id_dat) {
+      setMenuItems(gasApi.getCachedOrderMenus(booking.id_dat));
+    }
+    void loadMenus();
   }, [loadMenus]);
 
   // Quick quantity change: [-] [SL] [+]
@@ -52,7 +59,11 @@ export const MenuDetailView: React.FC<MenuDetailViewProps> = ({
 
     // Optimistic UI update
     setMenuItems((prev) =>
-      prev.map((m) => (m.id_mon === item.id_mon ? { ...m, so_luong: newQty } : m))
+      prev.map((m) =>
+        m.id_mon === item.id_mon
+          ? { ...m, so_luong: newQty, thanh_tien: (m.don_gia || 0) * newQty }
+          : m
+      )
     );
 
     try {
@@ -66,7 +77,7 @@ export const MenuDetailView: React.FC<MenuDetailViewProps> = ({
     } catch (err) {
       console.error('Lỗi khi cập nhật số lượng món:', err);
       onShowToast('Lỗi cập nhật', 'Không thể cập nhật số lượng món ăn', 'error');
-      loadMenus();
+      void loadMenus(true);
     }
   };
 
@@ -77,7 +88,11 @@ export const MenuDetailView: React.FC<MenuDetailViewProps> = ({
 
     // Optimistic UI update
     setMenuItems((prev) =>
-      prev.map((m) => (m.id_mon === item.id_mon ? { ...m, so_luong: validQty } : m))
+      prev.map((m) =>
+        m.id_mon === item.id_mon
+          ? { ...m, so_luong: validQty, thanh_tien: (m.don_gia || 0) * validQty }
+          : m
+      )
     );
 
     try {
@@ -91,7 +106,7 @@ export const MenuDetailView: React.FC<MenuDetailViewProps> = ({
     } catch (err) {
       console.error('Lỗi khi cập nhật số lượng món:', err);
       onShowToast('Lỗi cập nhật', 'Không thể cập nhật số lượng món ăn', 'error');
-      loadMenus();
+      void loadMenus(true);
     }
   };
 
@@ -118,7 +133,7 @@ export const MenuDetailView: React.FC<MenuDetailViewProps> = ({
         ten_ban: firstTable,
       });
       onShowToast('Thêm món thành công', `Đã thêm ${items.length} món ăn vào đơn ${booking.id_dat}`, 'success');
-      loadMenus();
+      setMenuItems(gasApi.getCachedOrderMenus(booking.id_dat));
     } catch (err) {
       console.error('Lỗi khi thêm món:', err);
       onShowToast('Lỗi', 'Không thể thêm món ăn vào đơn', 'error');
@@ -136,7 +151,7 @@ export const MenuDetailView: React.FC<MenuDetailViewProps> = ({
         ghi_chu: newGhiChu,
       });
       onShowToast('Cập nhật thành công', `Đã lưu thay đổi cho món ăn`, 'success');
-      loadMenus();
+      setMenuItems(gasApi.getCachedOrderMenus(booking.id_dat || ''));
     } catch (err) {
       console.error('Lỗi khi sửa món:', err);
       onShowToast('Lỗi', 'Không thể cập nhật món ăn', 'error');
@@ -207,7 +222,7 @@ export const MenuDetailView: React.FC<MenuDetailViewProps> = ({
           <button
             type="button"
             id="btn-refresh-menu-detail"
-            onClick={loadMenus}
+            onClick={() => void loadMenus(true)}
             disabled={isLoading}
             className="p-2 rounded-xl bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 text-xs font-semibold"
             title="Tải lại danh sách món"
@@ -229,7 +244,7 @@ export const MenuDetailView: React.FC<MenuDetailViewProps> = ({
 
       {/* Dishes List */}
       <div className="flex flex-col gap-2.5">
-        {isLoading ? (
+        {isLoading && menuItems.length === 0 ? (
           <div className="text-center py-16 text-slate-400 text-xs flex flex-col items-center gap-2">
             <RefreshCw className="w-6 h-6 animate-spin text-amber-400" />
             <span>Đang tải danh sách món ăn từ DATMON...</span>

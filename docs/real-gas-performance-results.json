@@ -1,0 +1,28 @@
+{
+  "executedAt": "2026-09-09T06:24:35.945Z",
+  "mode": "Real GAS, read-only UI flow",
+  "endpointConfigured": true,
+  "measurements": {
+    "initialDataReadyMs": 4214,
+    "detailModalVisibleMs": 74,
+    "menuApiRemainingMs": 3855,
+    "bookingViewVisibleMs": 821,
+    "warmCacheDataReadyMs": 65,
+    "warmBackgroundSyncFinishedMs": 1535
+  },
+  "requestSummary": {
+    "GET STATUS_AND_BOOKINGS": 2,
+    "GET GET_MENUS": 1,
+    "GET GET_ALL_DATMON": 1
+  },
+  "consoleErrors": [],
+  "pageErrors": [],
+  "assertions": {
+    "oneCombinedGetPerPageLoad": true,
+    "noRedundantBookingsGet": true,
+    "datMonReadScopedToSelectedDate": true,
+    "noBusinessWriteRequests": true,
+    "noPageErrors": true
+  },
+  "passed": true
+}

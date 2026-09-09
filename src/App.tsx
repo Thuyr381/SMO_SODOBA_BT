@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useCallback } from 'react';
 import { INITIAL_TABLES } from './config/constants';
 import { ActionMode, BookingPayload, OrderMenuItem, TableItem, TableStatusClass, ToastMessage } from './types';
 import { useTableMap } from './features/floorplan/hooks/useTableMap';
@@ -16,11 +16,18 @@ import { TableDetailModal } from './features/floorplan/components/TableDetailMod
 import { MoveTableModal } from './features/floorplan/components/MoveTableModal';
 import { LinkTableModal } from './features/floorplan/components/LinkTableModal';
 import { KitchenSlipModal } from './features/floorplan/components/KitchenSlipModal';
-import { BookingListView } from './features/menu/BookingListView';
-import { MenuDetailView } from './features/menu/MenuDetailView';
-import { SettingsView } from './features/settings/SettingsView';
 import { GasAuthModal } from './features/settings/components/GasAuthModal';
 import { ToastContainer } from './components/ui/ToastContainer';
+
+const BookingListView = lazy(() =>
+  import('./features/menu/BookingListView').then((module) => ({ default: module.BookingListView }))
+);
+const MenuDetailView = lazy(() =>
+  import('./features/menu/MenuDetailView').then((module) => ({ default: module.MenuDetailView }))
+);
+const SettingsView = lazy(() =>
+  import('./features/settings/SettingsView').then((module) => ({ default: module.SettingsView }))
+);
 
 export default function App() {
   const { userName, triggerHaptic, triggerNotificationHaptic } = useTelegram();
@@ -43,14 +50,19 @@ export default function App() {
     return new Date().toISOString().split('T')[0];
   });
 
-  const { statusMap, isLoading, syncStatus, mutateTableStatusOptimistic, rollbackStatus } = useTableMap(selectedDate);
-
   // Floorplan interaction states
   const [actionMode, setActionMode] = useState<ActionMode>(null);
   const [selectedTables, setSelectedTables] = useState<Set<string>>(new Set());
 
   // Bookings list & Detail for menu management
-  const [bookings, setBookings] = useState<BookingPayload[]>([]);
+  const [bookings, setBookings] = useState<BookingPayload[]>(() => gasApi.getCachedBookings(selectedDate));
+  const handleBookingsSynced = useCallback((syncedBookings: BookingPayload[]) => {
+    setBookings(syncedBookings);
+  }, []);
+  const { statusMap, isLoading, syncStatus, mutateTableStatusOptimistic, rollbackStatus } = useTableMap(
+    selectedDate,
+    handleBookingsSynced
+  );
   const [activeBookingForMenu, setActiveBookingForMenu] = useState<BookingPayload | null>(null);
   const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
 
@@ -63,6 +75,7 @@ export default function App() {
     status: TableStatusClass;
     booking: BookingPayload | null;
     orderItems: OrderMenuItem[];
+    isOrderItemsLoading: boolean;
   } | null>(null);
 
   // Move Table (Group Transfer - Kịch bản 1) state
@@ -123,18 +136,23 @@ export default function App() {
   };
 
   // Fetch all bookings
-  const loadBookings = useCallback(async () => {
+  const loadBookings = useCallback(async (forceRefresh = false) => {
     try {
-      const list = await gasApi.getAllBookings(selectedDate);
+      const list = await gasApi.getAllBookings(selectedDate, forceRefresh);
       setBookings(list);
     } catch (err) {
       console.error('Lỗi khi lấy danh sách đặt bàn:', err);
     }
   }, [selectedDate]);
 
+  const refreshBookingsFromCache = useCallback(() => {
+    setBookings(gasApi.getCachedBookings(selectedDate));
+  }, [selectedDate]);
+
   useEffect(() => {
-    loadBookings();
-  }, [loadBookings]);
+    // Đổi ngày hiển thị cache ngay; useTableMap sẽ dùng cùng một GET để làm mới cả bàn và đơn.
+    refreshBookingsFromCache();
+  }, [refreshBookingsFromCache]);
 
   // Handle Mode Selection in Toolbar
   const handleSelectMode = (mode: ActionMode) => {
@@ -152,7 +170,7 @@ export default function App() {
   // Handle Table Click:
   // If actionMode === null -> Open Table Detail Modal with Customer Representative
   // If in an Action Mode (CONFIRM, ARRIVE, CANCEL, BOOK, etc.) -> Synchronize multi-table selection for bookings with >= 2 tables (except LOCK)
-  const handleToggleTable = async (tableId: string) => {
+  const handleToggleTable = useCallback(async (tableId: string) => {
     triggerHaptic('light');
 
     // Case 1: actionMode === null -> Display table details & representative customer information
@@ -165,21 +183,31 @@ export default function App() {
         (b) => b.trang_thai !== 'HỦY' && b.danh_sach_ban && b.danh_sach_ban.includes(tableId)
       ) || null;
 
-      let orderItems: OrderMenuItem[] = [];
-      if (matchedBooking?.id_dat) {
-        try {
-          orderItems = await gasApi.getOrderMenus(matchedBooking.id_dat);
-        } catch (e) {
-          console.error('Lỗi lấy món ăn:', e);
-        }
-      }
-
       setInspectTable({
         table: targetTable,
         status: currentStatus,
         booking: matchedBooking,
-        orderItems,
+        orderItems: matchedBooking?.id_dat ? gasApi.getCachedOrderMenus(matchedBooking.id_dat) : [],
+        isOrderItemsLoading: Boolean(matchedBooking?.id_dat),
       });
+
+      if (matchedBooking?.id_dat) {
+        const bookingId = matchedBooking.id_dat;
+        void gasApi.getOrderMenus(bookingId).then((orderItems) => {
+          setInspectTable((current) =>
+            current?.booking?.id_dat === bookingId
+              ? { ...current, orderItems, isOrderItemsLoading: false }
+              : current
+          );
+        }).catch((error) => {
+          console.error('Lỗi lấy món ăn:', error);
+          setInspectTable((current) =>
+            current?.booking?.id_dat === bookingId
+              ? { ...current, isOrderItemsLoading: false }
+              : current
+          );
+        });
+      }
       return;
     }
 
@@ -236,10 +264,10 @@ export default function App() {
       }
       return next;
     });
-  };
+  }, [actionMode, bookings, selectedTables, showToast, statusMap, triggerHaptic]);
 
   // Inspect booking directly from Search Bar autocomplete
-  const handleInspectBooking = async (booking: BookingPayload) => {
+  const handleInspectBooking = useCallback(async (booking: BookingPayload) => {
     if (!booking.danh_sach_ban || booking.danh_sach_ban.length === 0) return;
     const tableId = booking.danh_sach_ban[0];
     const targetTable = INITIAL_TABLES.find((t) => t.id === tableId) || {
@@ -250,22 +278,32 @@ export default function App() {
       status: 'booked' as TableStatusClass,
     };
 
-    let orderItems: OrderMenuItem[] = [];
-    if (booking.id_dat) {
-      try {
-        orderItems = await gasApi.getOrderMenus(booking.id_dat);
-      } catch (e) {
-        console.error('Lỗi lấy món ăn:', e);
-      }
-    }
-
     setInspectTable({
       table: targetTable,
       status: statusMap[tableId] || 'booked',
       booking,
-      orderItems,
+      orderItems: booking.id_dat ? gasApi.getCachedOrderMenus(booking.id_dat) : [],
+      isOrderItemsLoading: Boolean(booking.id_dat),
     });
-  };
+
+    if (booking.id_dat) {
+      const bookingId = booking.id_dat;
+      void gasApi.getOrderMenus(bookingId).then((orderItems) => {
+        setInspectTable((current) =>
+          current?.booking?.id_dat === bookingId
+            ? { ...current, orderItems, isOrderItemsLoading: false }
+            : current
+        );
+      }).catch((error) => {
+        console.error('Lỗi lấy món ăn:', error);
+        setInspectTable((current) =>
+          current?.booking?.id_dat === bookingId
+            ? { ...current, isOrderItemsLoading: false }
+            : current
+        );
+      });
+    }
+  }, [statusMap]);
 
   // Clear Selection
   const handleClearSelection = () => {
@@ -305,7 +343,7 @@ export default function App() {
           trang_thai: 'ĐÃ XÁC NHẬN',
           ngay_dat: selectedDate,
         });
-        await Promise.all([syncStatus(), loadBookings()]);
+        refreshBookingsFromCache();
       } catch (err) {
         console.error('Lỗi khi xác nhận bàn:', err);
         rollbackStatus();
@@ -334,7 +372,7 @@ export default function App() {
           trang_thai: 'ĐÃ ĐẾN',
           ngay_dat: selectedDate,
         });
-        await Promise.all([syncStatus(), loadBookings()]);
+        refreshBookingsFromCache();
       } catch (err) {
         console.error('Lỗi khi cập nhật khách đã đến:', err);
         rollbackStatus();
@@ -363,7 +401,7 @@ export default function App() {
           trang_thai: 'ĐÃ VỀ',
           ngay_dat: selectedDate,
         });
-        await Promise.all([syncStatus(), loadBookings()]);
+        refreshBookingsFromCache();
       } catch (err) {
         console.error('Lỗi khi cập nhật khách đã về:', err);
         rollbackStatus();
@@ -392,7 +430,7 @@ export default function App() {
           trang_thai: 'HỦY',
           ngay_dat: selectedDate,
         });
-        await Promise.all([syncStatus(), loadBookings()]);
+        refreshBookingsFromCache();
       } catch (err) {
         console.error('Lỗi khi hủy đặt bàn:', err);
         rollbackStatus();
@@ -431,7 +469,7 @@ export default function App() {
           unlock: isCurrentlyInactive,
           ngay_dat: selectedDate,
         });
-        await Promise.all([syncStatus(), loadBookings()]);
+        refreshBookingsFromCache();
       } catch (err) {
         console.error('Lỗi khi khóa/mở bàn:', err);
         rollbackStatus();
@@ -465,7 +503,7 @@ export default function App() {
         `Đã lưu đơn ${res.data?.id_dat || 'S8'} cho khách ${payload.ten_khach} (${tableIds.join(', ')})`,
         'success'
       );
-      await Promise.all([syncStatus(), loadBookings()]);
+      refreshBookingsFromCache();
     } catch (err) {
       console.error('Lỗi khi lưu đơn đặt bàn:', err);
       rollbackStatus();
@@ -505,7 +543,7 @@ export default function App() {
         `Đã lưu thông tin đơn ${updatedBooking.id_dat} (Khách: ${updatedBooking.ten_khach}, Bàn: [${newTables.join(', ')}])`,
         'success'
       );
-      await loadBookings();
+      refreshBookingsFromCache();
       setActionMode(null);
       setSelectedTables(new Set());
     } catch (err) {
@@ -554,7 +592,7 @@ export default function App() {
       let orderItems: OrderMenuItem[] = [];
       if (idDat) {
         try {
-          orderItems = await gasApi.getOrderMenus(idDat);
+          orderItems = gasApi.getCachedOrderMenus(idDat);
         } catch (e) {
           console.error(e);
         }
@@ -569,7 +607,7 @@ export default function App() {
         orderItems,
       });
 
-      await loadBookings();
+      refreshBookingsFromCache();
     } catch (err) {
       console.error('Lỗi khi dời bàn:', err);
       rollbackStatus();
@@ -599,7 +637,7 @@ export default function App() {
         `Đã nối thêm bàn [${addedTables.join(', ')}] vào đơn ${idDat}`,
         'success'
       );
-      await loadBookings();
+      refreshBookingsFromCache();
     } catch (err) {
       console.error('Lỗi khi nối thêm bàn:', err);
       rollbackStatus();
@@ -638,8 +676,9 @@ export default function App() {
         action: 'UPDATE_STATUS',
         danh_sach_ban: booking.danh_sach_ban,
         trang_thai: newStatus,
+        ngay_dat: booking.ngay_dat,
       });
-      await loadBookings();
+      refreshBookingsFromCache();
       if (inspectTable) {
         setInspectTable(null);
       }
@@ -675,7 +714,7 @@ export default function App() {
         unlock: isCurrentlyInactive,
         ngay_dat: selectedDate,
       });
-      await Promise.all([syncStatus(), loadBookings()]);
+      refreshBookingsFromCache();
     } catch (err) {
       console.error('Lỗi khóa bàn:', err);
       rollbackStatus();
@@ -690,8 +729,7 @@ export default function App() {
   };
 
   const handleRefreshAll = () => {
-    syncStatus();
-    loadBookings();
+    void syncStatus(true);
   };
 
   // Handle view navigation with password protection for Sheet / GAS tab (smo_vungmanh)
@@ -781,38 +819,40 @@ export default function App() {
           />
         )}
 
-        {currentView === 'bookings' && !activeBookingForMenu && (
-          <BookingListView
-            bookings={bookings}
-            selectedDate={selectedDate}
-            onChangeDate={setSelectedDate}
-            onRefreshBookings={loadBookings}
-            onOpenMenuDetail={handleOpenMenuDetail}
-            onUpdateStatus={handleUpdateBookingStatus}
-            onOpenEditBooking={(b) => setEditBooking(b)}
-            onNewBookingClick={() => {
-              setCurrentView('floorplan');
-              setActionMode('BOOK');
-              showToast('Đặt bàn', 'Hãy chọn các bàn đang trống trên sơ đồ rồi bấm Tiếp tục đặt bàn', 'info');
-            }}
-          />
-        )}
+        <Suspense fallback={<div className="py-16 text-center text-sm text-slate-400">Đang mở chức năng...</div>}>
+          {currentView === 'bookings' && !activeBookingForMenu && (
+            <BookingListView
+              bookings={bookings}
+              selectedDate={selectedDate}
+              onChangeDate={setSelectedDate}
+              onRefreshBookings={loadBookings}
+              onOpenMenuDetail={handleOpenMenuDetail}
+              onUpdateStatus={handleUpdateBookingStatus}
+              onOpenEditBooking={(b) => setEditBooking(b)}
+              onNewBookingClick={() => {
+                setCurrentView('floorplan');
+                setActionMode('BOOK');
+                showToast('Đặt bàn', 'Hãy chọn các bàn đang trống trên sơ đồ rồi bấm Tiếp tục đặt bàn', 'info');
+              }}
+            />
+          )}
 
-        {currentView === 'bookings' && activeBookingForMenu && (
-          <MenuDetailView
-            booking={activeBookingForMenu}
-            onBack={() => setActiveBookingForMenu(null)}
-            onShowToast={showToast}
-          />
-        )}
+          {currentView === 'bookings' && activeBookingForMenu && (
+            <MenuDetailView
+              booking={activeBookingForMenu}
+              onBack={() => setActiveBookingForMenu(null)}
+              onShowToast={showToast}
+            />
+          )}
 
-        {currentView === 'settings' && isGasUnlocked && (
-          <SettingsView
-            onShowToast={showToast}
-            onRefreshAll={handleRefreshAll}
-            onLock={handleLockGasTab}
-          />
-        )}
+          {currentView === 'settings' && isGasUnlocked && (
+            <SettingsView
+              onShowToast={showToast}
+              onRefreshAll={handleRefreshAll}
+              onLock={handleLockGasTab}
+            />
+          )}
+        </Suspense>
       </main>
 
       {/* Bottom Bar Confirmation */}
@@ -853,6 +893,7 @@ export default function App() {
         status={inspectTable?.status || 'empty'}
         booking={inspectTable?.booking || null}
         orderItems={inspectTable?.orderItems || []}
+        isOrderItemsLoading={inspectTable?.isOrderItemsLoading || false}
         onClose={() => setInspectTable(null)}
         onOpenBookingModal={(tableId) => {
           setSelectedTables(new Set([tableId]));

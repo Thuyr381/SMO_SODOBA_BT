@@ -1,5 +1,5 @@
 // src/hooks/useTelegram.ts
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 interface TelegramUser {
   id?: number;
@@ -43,12 +43,24 @@ declare global {
 }
 
 export function useTelegram() {
-  const tg = useMemo<TelegramWebApp | undefined>(() => {
+  const [tg, setTg] = useState<TelegramWebApp | undefined>(() => {
     if (typeof window !== 'undefined' && window.Telegram?.WebApp) {
       return window.Telegram.WebApp;
     }
     return undefined;
-  }, []);
+  });
+
+  // Script Telegram được tải async để không chặn app; nhận WebApp ngay khi script sẵn sàng.
+  useEffect(() => {
+    if (tg || typeof document === 'undefined') return;
+    const telegramScript = document.querySelector<HTMLScriptElement>(
+      'script[src="https://telegram.org/js/telegram-web-app.js"]'
+    );
+    const handleTelegramReady = () => setTg(window.Telegram?.WebApp);
+    handleTelegramReady();
+    telegramScript?.addEventListener('load', handleTelegramReady);
+    return () => telegramScript?.removeEventListener('load', handleTelegramReady);
+  }, [tg]);
 
   useEffect(() => {
     if (tg) {
@@ -66,7 +78,7 @@ export function useTelegram() {
     ? [user.first_name, user.last_name].filter(Boolean).join(' ') || user.username || 'Lễ tân SMO'
     : 'Chủ SMO';
 
-  const triggerHaptic = (style: 'light' | 'medium' | 'heavy' | 'selection' = 'light') => {
+  const triggerHaptic = useCallback((style: 'light' | 'medium' | 'heavy' | 'selection' = 'light') => {
     try {
       if (tg?.HapticFeedback) {
         if (style === 'selection') {
@@ -81,9 +93,9 @@ export function useTelegram() {
     } catch {
       // Ignore vibration errors on unsupported platforms
     }
-  };
+  }, [tg]);
 
-  const triggerNotificationHaptic = (type: 'success' | 'warning' | 'error') => {
+  const triggerNotificationHaptic = useCallback((type: 'success' | 'warning' | 'error') => {
     try {
       if (tg?.HapticFeedback) {
         tg.HapticFeedback.notificationOccurred(type);
@@ -93,7 +105,7 @@ export function useTelegram() {
     } catch {
       // Ignore vibration errors
     }
-  };
+  }, [tg]);
 
   return {
     tg,

@@ -29,7 +29,7 @@ interface BookingListViewProps {
   onOpenEditBooking?: (booking: BookingPayload) => void;
   selectedDate?: string;
   onChangeDate?: (date: string) => void;
-  onRefreshBookings?: () => Promise<void>;
+  onRefreshBookings?: (forceRefresh?: boolean) => Promise<void>;
 }
 
 export const BookingListView: React.FC<BookingListViewProps> = ({
@@ -53,7 +53,9 @@ export const BookingListView: React.FC<BookingListViewProps> = ({
   const [customDate, setCustomDate] = useState(() => (selectedDate && selectedDate !== 'ALL' ? selectedDate : today));
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
-  const [datMonItems, setDatMonItems] = useState<OrderMenuItem[]>([]);
+  const [datMonItems, setDatMonItems] = useState<OrderMenuItem[]>(() =>
+    gasApi.getCachedAllDatMonMenus({ selectedDate })
+  );
   const [isLoadingDatMon, setIsLoadingDatMon] = useState(false);
 
   // Sync dateFilter if selectedDate changes externally
@@ -72,24 +74,25 @@ export const BookingListView: React.FC<BookingListViewProps> = ({
   }, [selectedDate, today]);
 
   // Tải trực tiếp dữ liệu từ table DATMON của Google Sheet
-  const loadDatMonData = useCallback(async () => {
+  const loadDatMonData = useCallback(async (forceRefresh = false) => {
     setIsLoadingDatMon(true);
+    setDatMonItems(gasApi.getCachedAllDatMonMenus({ selectedDate }));
     try {
-      const items = await gasApi.getAllDatMonMenus();
+      const items = await gasApi.getAllDatMonMenus({ selectedDate, forceRefresh });
       setDatMonItems(items || []);
     } catch (err) {
       console.error('Lỗi khi tải dữ liệu table DATMON:', err);
     } finally {
       setIsLoadingDatMon(false);
     }
-  }, []);
+  }, [selectedDate]);
 
   useEffect(() => {
-    loadDatMonData();
+    void loadDatMonData();
   }, [loadDatMonData]);
 
   const handleRefreshAll = async () => {
-    await Promise.all([loadDatMonData(), onRefreshBookings?.()]);
+    await Promise.all([loadDatMonData(true), onRefreshBookings?.(true)]);
   };
 
   // Map số lượng món trong DATMON theo từng id_dat
@@ -506,4 +509,3 @@ export const BookingListView: React.FC<BookingListViewProps> = ({
     </div>
   );
 };
-

@@ -1,7 +1,7 @@
 // src/config/constants.ts
 import { TableItem, MasterMenuItem, TableStatusClass } from '../types';
 
-export const API_DATBAN_URL = import.meta.env.VITE_GAS_API_URL || 'https://script.google.com/macros/s/AKfycbz_MOCK_SODOBA_S8/exec';
+export const API_DATBAN_URL = import.meta.env.VITE_GAS_API_URL || 'https://script.google.com/macros/s/AKfycbyG8nYCc2yh76JOxqySSVn6adi9KInPF8vE0ibxOQU704GIGgDa837mD8KI6nOSLRua/exec';
 
 export const STATUS_COLORS: Record<TableStatusClass, { bg: string; text: string; label: string; border: string; badgeBg: string }> = {
   empty: {
@@ -222,4 +222,3 @@ import { SMO_MASTER_MENUS } from '../data/smoMenuData';
  * Danh mục món ăn thực tế đầy đủ của SMO (MENU_MON / CONFIG_MON)
  */
 export const INITIAL_MENU_ITEMS: MasterMenuItem[] = SMO_MASTER_MENUS;
-

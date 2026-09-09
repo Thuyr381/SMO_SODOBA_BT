@@ -25,48 +25,171 @@
  */
 
 // ============================================================================
+// 0. CACHE NGẮN HẠN - KHÔNG THAY ĐỔI LOGIC NGHIỆP VỤ
+// ============================================================================
+var SODOBA_CACHE_SCHEMA = "20260909-v1";
+var SODOBA_DYNAMIC_CACHE_TTL_SECONDS = 15;
+var SODOBA_MASTER_MENU_CACHE_TTL_SECONDS = 300;
+var SODOBA_CACHE_REVISION_PROPERTY = "SODOBA_DYNAMIC_CACHE_REVISION";
+var SODOBA_MASTER_CACHE_REVISION_PROPERTY = "SODOBA_MASTER_MENU_CACHE_REVISION";
+
+function isForceRefreshGS(value) {
+  if (value === true) return true;
+  var normalized = (value || "").toString().trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function getSodobaCacheRevision(domain) {
+  try {
+    var propertyName = domain === "master_menu"
+      ? SODOBA_MASTER_CACHE_REVISION_PROPERTY
+      : SODOBA_CACHE_REVISION_PROPERTY;
+    return PropertiesService.getScriptProperties().getProperty(propertyName) || "0";
+  } catch (err) {
+    return "0";
+  }
+}
+
+function getSodobaCacheKey(domain, scope) {
+  var digest = Utilities.computeDigest(
+    Utilities.DigestAlgorithm.SHA_256,
+    (scope || "all").toString(),
+    Utilities.Charset.UTF_8
+  );
+  var hash = digest.map(function(value) {
+    return ("0" + ((value + 256) % 256).toString(16)).slice(-2);
+  }).join("").slice(0, 32);
+  return [SODOBA_CACHE_SCHEMA, domain, getSodobaCacheRevision(domain), hash].join(":");
+}
+
+function getSodobaCachedJson(domain, scope, forceRefresh) {
+  if (forceRefresh) return null;
+  try {
+    var cached = CacheService.getScriptCache().get(getSodobaCacheKey(domain, scope));
+    return cached ? JSON.parse(cached) : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function putSodobaCachedJson(domain, scope, value, ttlSeconds) {
+  try {
+    var serialized = JSON.stringify(value);
+    // CacheService giới hạn 100 KB mỗi key; bỏ qua cache nếu payload quá lớn.
+    if (Utilities.newBlob(serialized).getBytes().length > 95000) return;
+    CacheService.getScriptCache().put(
+      getSodobaCacheKey(domain, scope),
+      serialized,
+      ttlSeconds
+    );
+  } catch (err) {
+    // Cache chỉ là lớp tăng tốc; lỗi cache không được phép làm hỏng nghiệp vụ.
+  }
+}
+
+function invalidateSodobaDynamicCache() {
+  try {
+    PropertiesService.getScriptProperties().setProperty(
+      SODOBA_CACHE_REVISION_PROPERTY,
+      new Date().getTime().toString() + "-" + Math.floor(Math.random() * 1000000)
+    );
+  } catch (err) {
+    // TTL 15 giây vẫn bảo đảm dữ liệu tự hết hạn nếu PropertiesService tạm lỗi.
+  }
+}
+
+function invalidateSodobaMasterMenuCache() {
+  try {
+    PropertiesService.getScriptProperties().setProperty(
+      SODOBA_MASTER_CACHE_REVISION_PROPERTY,
+      new Date().getTime().toString() + "-" + Math.floor(Math.random() * 1000000)
+    );
+  } catch (err) {}
+}
+
+// ============================================================================
 // 1. HÀM ĐỌC DỮ LIỆU DÀNH CHO MINI APP SODOBA (GET REQUEST)
 // ============================================================================
 function doGet(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var action = (e && e.parameter && e.parameter.action) ? e.parameter.action.toString().toUpperCase() : "";
+    var params = e && e.parameter ? e.parameter : {};
+    var action = params.action ? params.action.toString().toUpperCase() : "";
+    var forceRefresh = isForceRefreshGS(params.force_refresh);
 
     // 1.1 LẤY DANH SÁCH MÓN ĂN THEO ĐƠN TỪ TAB DATMON
-    if (action === "GET_MENUS" || (e && e.parameter && e.parameter.id_dat && !e.parameter.date)) {
-      var idDat = e.parameter.id_dat;
+    if (action === "GET_MENUS" || (action === "" && params.id_dat && !params.date)) {
+      var idDat = params.id_dat;
+      var menuScope = "booking:" + (idDat || "").toString().trim().toUpperCase();
+      var cachedMenus = getSodobaCachedJson("datmon", menuScope, forceRefresh);
+      if (cachedMenus !== null) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "success", data: cachedMenus, cache_hit: true
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
       var menus = getActiveMenusForBooking(ss, idDat);
+      putSodobaCachedJson("datmon", menuScope, menus, SODOBA_DYNAMIC_CACHE_TTL_SECONDS);
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
-        data: menus
+        data: menus,
+        cache_hit: false
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
     // 1.2 LẤY TOÀN BỘ MÓN ĂN ĐÃ ĐẶT TỪ TAB DATMON
     if (action === "GET_ALL_DATMON" || action === "GET_ALL_MENUS") {
-      var allMenus = getAllActiveMenusFromDatMon(ss);
+      var datMonDate = params.date || "ALL";
+      var datMonIds = params.id_dats || params.ids || "";
+      var datMonScope = "date:" + datMonDate + "|ids:" + datMonIds;
+      var cachedAllMenus = getSodobaCachedJson("datmon", datMonScope, forceRefresh);
+      if (cachedAllMenus !== null) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "success", data: cachedAllMenus, cache_hit: true
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var allMenus = getAllActiveMenusFromDatMon(ss, { date: datMonDate, idDats: datMonIds });
+      putSodobaCachedJson("datmon", datMonScope, allMenus, SODOBA_DYNAMIC_CACHE_TTL_SECONDS);
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
-        data: allMenus
+        data: allMenus,
+        cache_hit: false
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
     // 1.3 LẤY DANH MỤC MÓN ĂN TỪ TAB MENU_MON
     if (action === "GET_MENU_MON" || action === "GET_CONFIG_MON") {
+      var cachedMasterMenus = getSodobaCachedJson("master_menu", "all", forceRefresh);
+      if (cachedMasterMenus !== null) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "success", data: cachedMasterMenus, cache_hit: true
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
       var masterMenus = getMasterMenusFromSheet(ss);
+      putSodobaCachedJson("master_menu", "all", masterMenus, SODOBA_MASTER_MENU_CACHE_TTL_SECONDS);
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
-        data: masterMenus
+        data: masterMenus,
+        cache_hit: false
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
     // 1.4 LẤY TOÀN BỘ DANH SÁCH ĐẶT BÀN
     if (action === "GET_BOOKINGS") {
-      var allBookings = getAllBookingsList(ss, e && e.parameter ? e.parameter.date : null);
+      var bookingDate = params.date || "ALL";
+      var bookingScope = "date:" + bookingDate;
+      var cachedBookings = getSodobaCachedJson("bookings", bookingScope, forceRefresh);
+      if (cachedBookings !== null) {
+        return ContentService.createTextOutput(JSON.stringify({
+          status: "success", data: cachedBookings, bookings: cachedBookings, cache_hit: true
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+      var allBookings = getAllBookingsList(ss, bookingDate);
+      putSodobaCachedJson("bookings", bookingScope, allBookings, SODOBA_DYNAMIC_CACHE_TTL_SECONDS);
       return ContentService.createTextOutput(JSON.stringify({
         status: "success",
         data: allBookings,
-        bookings: allBookings
+        bookings: allBookings,
+        cache_hit: false
       })).setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -91,14 +214,21 @@ function doGet(e) {
     var targetDateStr = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "dd/MM/yyyy");
 
     // Lấy ngày từ Tham số Query 'date' (Hỗ trợ định dạng dd/MM/yyyy, yyyy-MM-dd)
-    if (e && e.parameter && e.parameter.date) {
-      var paramDate = e.parameter.date.toString().trim();
+    if (params.date) {
+      var paramDate = params.date.toString().trim();
       if (paramDate.indexOf("-") !== -1 && paramDate.split("-")[0].length === 4) {
         var parts = paramDate.split("-");
         targetDateStr = parts[2] + "/" + parts[1] + "/" + parts[0];
       } else {
         targetDateStr = paramDate;
       }
+    }
+
+    var combinedScope = "date:" + targetDateStr;
+    var cachedCombined = getSodobaCachedJson("floor_and_bookings", combinedScope, forceRefresh);
+    if (cachedCombined !== null) {
+      cachedCombined.cache_hit = true;
+      return ContentService.createTextOutput(JSON.stringify(cachedCombined)).setMimeType(ContentService.MimeType.JSON);
     }
 
     // A. ĐỌC TRẠNG THÁI KHÓA CỐ ĐỊNH TỪ CONFIG_BAN
@@ -221,7 +351,8 @@ function doGet(e) {
       status: "success",
       statusMap: statusMap,
       detailsMap: detailsMap,
-      bookings: bookingsList
+      bookings: bookingsList,
+      cache_hit: false
     };
 
     // Flatten keys bàn cho index.html cũ: Object.keys(currentStatusMap)
@@ -230,6 +361,13 @@ function doGet(e) {
         responseObj[k] = statusMap[k];
       }
     }
+
+    putSodobaCachedJson(
+      "floor_and_bookings",
+      combinedScope,
+      responseObj,
+      SODOBA_DYNAMIC_CACHE_TTL_SECONDS
+    );
 
     return ContentService.createTextOutput(JSON.stringify(responseObj)).setMimeType(ContentService.MimeType.JSON);
 
@@ -244,6 +382,18 @@ function doGet(e) {
 // ============================================================================
 // 2. HÀM GHI & CẬP NHẬT DỮ LIỆU (POST REQUEST)
 // ============================================================================
+function mutationJsonOutput(ss, data, result) {
+  var viewsDeferred = Boolean(data && data.defer_views === true);
+  if (!viewsDeferred) {
+    syncAllViewsSafely(ss);
+  }
+  if (result && (result.status || "").toString().toLowerCase() === "success") {
+    invalidateSodobaDynamicCache();
+  }
+  result.views_deferred = viewsDeferred;
+  return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+}
+
 function doPost(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -270,6 +420,8 @@ function doPost(e) {
       var rows = sheet.getDataRange().getValues();
       var updatedCount = 0;
       var targetDate = data.ngay_dat ? formatDateVN(data.ngay_dat) : todayStr;
+      var statusRanges = [];
+      var timestampRanges = [];
 
       for (var i = rows.length - 1; i >= 1; i--) {
         var ngayDatRaw = rows[i][1]; // Cột B
@@ -285,19 +437,22 @@ function doPost(e) {
           });
 
           if (hasMatch) {
-            sheet.getRange(i + 1, 12).setValue(data.trang_thai); // Cột L: trang_thai
-            sheet.getRange(i + 1, 14).setValue(timeStampStr);   // Cột N: thoi_gian_nhap
+            statusRanges.push("L" + (i + 1));
+            timestampRanges.push("N" + (i + 1));
             updatedCount++;
           }
         }
       }
 
-      syncAllViewsSafely(ss);
-      return ContentService.createTextOutput(JSON.stringify({
+      if (statusRanges.length > 0) {
+        sheet.getRangeList(statusRanges).setValue(data.trang_thai);
+        sheet.getRangeList(timestampRanges).setValue(timeStampStr);
+      }
+      return mutationJsonOutput(ss, data, {
         status: "success",
         message: updatedCount > 0 ? "Cập nhật thành công" : "Đã cập nhật CONFIG_BAN",
         updatedCount: updatedCount
-      })).setMimeType(ContentService.MimeType.JSON);
+      });
     }
 
     // ------------------------------------------------------------------------
@@ -318,30 +473,32 @@ function doPost(e) {
 
       if (foundIndex !== -1) {
         var payload = data.booking || data;
-        if (payload.ten_khach !== undefined) sheet.getRange(foundIndex, 4).setValue(payload.ten_khach); 
-        if (payload.sdt !== undefined) sheet.getRange(foundIndex, 5).setValue(payload.sdt); 
-        if (payload.so_khach !== undefined) sheet.getRange(foundIndex, 6).setValue(parseInt(payload.so_khach) || 0); 
-        if (payload.gio_dat !== undefined) sheet.getRange(foundIndex, 3).setValue(payload.gio_dat); 
-        if (payload.ngay_dat !== undefined) sheet.getRange(foundIndex, 2).setValue(formatDateVN(payload.ngay_dat)); 
+        var updatedRow = rows[foundIndex - 1].slice(0, 15);
+        while (updatedRow.length < 15) updatedRow.push("");
+        if (payload.ten_khach !== undefined) updatedRow[3] = payload.ten_khach;
+        if (payload.sdt !== undefined) updatedRow[4] = payload.sdt;
+        if (payload.so_khach !== undefined) updatedRow[5] = parseInt(payload.so_khach) || 0;
+        if (payload.gio_dat !== undefined) updatedRow[2] = payload.gio_dat;
+        if (payload.ngay_dat !== undefined) updatedRow[1] = formatDateVN(payload.ngay_dat);
         if (payload.tien_coc !== undefined) {
           var tc = Number(payload.tien_coc) || 0;
-          sheet.getRange(foundIndex, 11).setValue(tc > 0 ? tc : ""); 
-          sheet.getRange(foundIndex, 10).setValue(tc > 0 ? "Đã cọc" : "Chưa"); 
+          updatedRow[10] = tc > 0 ? tc : "";
+          updatedRow[9] = tc > 0 ? "Đã cọc" : "Chưa";
         }
         if (payload.danh_sach_ban !== undefined) {
           var newBanStr = formatBanListString(payload.danh_sach_ban);
-          sheet.getRange(foundIndex, 7).setValue(newBanStr);
-          updateDatMonTableList(ss, targetId, newBanStr);
+          updatedRow[6] = newBanStr;
         }
-        if (payload.trang_thai !== undefined) sheet.getRange(foundIndex, 12).setValue(payload.trang_thai);
-        if (payload.ghi_chu !== undefined) sheet.getRange(foundIndex, 15).setValue(payload.ghi_chu); 
-        if (payload.nguoi_nhap !== undefined) sheet.getRange(foundIndex, 13).setValue(payload.nguoi_nhap); 
-        sheet.getRange(foundIndex, 14).setValue(timeStampStr); 
+        if (payload.trang_thai !== undefined) updatedRow[11] = payload.trang_thai;
+        if (payload.ghi_chu !== undefined) updatedRow[14] = payload.ghi_chu;
+        if (payload.nguoi_nhap !== undefined) updatedRow[12] = payload.nguoi_nhap;
+        updatedRow[13] = timeStampStr;
+        sheet.getRange(foundIndex, 1, 1, 15).setValues([updatedRow]);
+        if (payload.danh_sach_ban !== undefined) updateDatMonTableList(ss, targetId, newBanStr);
 
-        syncAllViewsSafely(ss);
-        return ContentService.createTextOutput(JSON.stringify({
+        return mutationJsonOutput(ss, data, {
           status: "success", message: "Cập nhật thông tin thành công"
-        })).setMimeType(ContentService.MimeType.JSON);
+        });
       } else {
         return ContentService.createTextOutput(JSON.stringify({
           status: "not_found", message: "Không tìm thấy mã đơn đặt bàn: " + targetId
@@ -358,21 +515,26 @@ function doPost(e) {
       if (isUnlock) {
         updateConfigBanStatus(reqTables, "ACTIVE");
         var rows = sheet.getDataRange().getValues();
+        var unlockStatusRanges = [];
+        var unlockTimestampRanges = [];
         for (var i = rows.length - 1; i >= 1; i--) {
           var trangThaiRow = rows[i][11] ? rows[i][11].toString().trim().toUpperCase() : "";
           if (trangThaiRow === "NO-SHOW" || trangThaiRow === "KHÓA") {
             var tablesInRow = splitTableListGS(rows[i][6] ? rows[i][6].toString() : "");
             var hasMatch = reqTables.some(function(rt) { return tablesInRow.indexOf(rt) !== -1; });
             if (hasMatch) {
-              sheet.getRange(i + 1, 12).setValue("HỦY");
-              sheet.getRange(i + 1, 14).setValue(timeStampStr);
+              unlockStatusRanges.push("L" + (i + 1));
+              unlockTimestampRanges.push("N" + (i + 1));
             }
           }
         }
-        syncAllViewsSafely(ss);
-        return ContentService.createTextOutput(JSON.stringify({
+        if (unlockStatusRanges.length > 0) {
+          sheet.getRangeList(unlockStatusRanges).setValue("HỦY");
+          sheet.getRangeList(unlockTimestampRanges).setValue(timeStampStr);
+        }
+        return mutationJsonOutput(ss, data, {
           status: "success", message: "Đã mở khóa bàn"
-        })).setMimeType(ContentService.MimeType.JSON);
+        });
       }
 
       // Khóa bàn: Ghi BLOCK vào CONFIG_BAN và thêm dòng NO-SHOW vào DATBAN
@@ -408,10 +570,9 @@ function doPost(e) {
         data.ghi_chu || "Khóa bàn qua Mini App"
       ]);
 
-      syncAllViewsSafely(ss);
-      return ContentService.createTextOutput(JSON.stringify({
+      return mutationJsonOutput(ss, data, {
         status: "success", id: newLockId, ban: banFormatted, trang_thai: "NO-SHOW"
-      })).setMimeType(ContentService.MimeType.JSON);
+      });
     }
 
     // ------------------------------------------------------------------------
@@ -440,10 +601,9 @@ function doPost(e) {
         sheet.getRange(foundRow, 15).setValue(oldGhiChu ? (oldGhiChu + " | " + moveNote) : moveNote);
         updateDatMonTableList(ss, idDat, newBanStr);
 
-        syncAllViewsSafely(ss);
-        return ContentService.createTextOutput(JSON.stringify({
+        return mutationJsonOutput(ss, data, {
           status: "success", message: "Đã dời bàn thành công", new_ban: newBanStr
-        })).setMimeType(ContentService.MimeType.JSON);
+        });
       }
     }
 
@@ -473,10 +633,9 @@ function doPost(e) {
         sheet.getRange(foundRow, 14).setValue(timeStampStr);
         updateDatMonTableList(ss, idDat, combinedBanStr);
 
-        syncAllViewsSafely(ss);
-        return ContentService.createTextOutput(JSON.stringify({
+        return mutationJsonOutput(ss, data, {
           status: "success", message: "Đã ghép thêm bàn thành công", danh_sach_ban: combinedBanStr
-        })).setMimeType(ContentService.MimeType.JSON);
+        });
       }
     }
 
@@ -487,18 +646,15 @@ function doPost(e) {
 
     if (reqAction === "ADD_MENU") {
       var addResult = handleAddMenuGS(ss, data);
-      syncAllViewsSafely(ss);
-      return ContentService.createTextOutput(JSON.stringify(addResult)).setMimeType(ContentService.MimeType.JSON);
+      return mutationJsonOutput(ss, data, addResult);
     }
     if (reqAction === "UPDATE_MENU") {
       var updateResult = handleUpdateMenuGS(ss, data);
-      syncAllViewsSafely(ss);
-      return ContentService.createTextOutput(JSON.stringify(updateResult)).setMimeType(ContentService.MimeType.JSON);
+      return mutationJsonOutput(ss, data, updateResult);
     }
     if (reqAction === "DELETE_MENU") {
       var deleteResult = handleDeleteMenuGS(ss, data);
-      syncAllViewsSafely(ss);
-      return ContentService.createTextOutput(JSON.stringify(deleteResult)).setMimeType(ContentService.MimeType.JSON);
+      return mutationJsonOutput(ss, data, deleteResult);
     }
     // Hỗ trợ đọc danh sách món qua POST để tránh lỗi nếu client gửi POST
     if (reqAction === "GET_MENUS") {
@@ -560,10 +716,9 @@ function doPost(e) {
         yeuCauBan, datMonTruoc, datCoc, tienCoc, trangThai, nguoiNhap, timeStampStr, ghiChu
       ]);
       
-      syncAllViewsSafely(ss);
-      return ContentService.createTextOutput(JSON.stringify({
+      return mutationJsonOutput(ss, data, {
         status: "success", id: newId, id_dat: newId, ban: banFormatted, trang_thai: trangThai 
-      })).setMimeType(ContentService.MimeType.JSON);
+      });
     }
 
     // 2.8 ĐỒNG BỘ VÀ TẠO TAB VIEW_HOMNAY & VIEW_BEP_HOMNAY
@@ -1006,14 +1161,18 @@ function updateConfigBanStatus(reqTablesClean, newStatus) {
   if (!configSheet) return;
   
   var data = configSheet.getDataRange().getValues();
+  var statusRanges = [];
   for (var i = 1; i < data.length; i++) {
     var maBan = data[i][1]; // Cột B
     if (!maBan) continue;
     
     var cleanB = cleanTableCode(maBan.toString());
     if (reqTablesClean.indexOf(cleanB) !== -1) {
-      configSheet.getRange(i + 1, 8).setValue(newStatus); // Cột H (cột thứ 8)
+      statusRanges.push("H" + (i + 1));
     }
+  }
+  if (statusRanges.length > 0) {
+    configSheet.getRangeList(statusRanges).setValue(newStatus); // Cột H
   }
 }
 
@@ -1292,7 +1451,7 @@ function getActiveMenusForBooking(ss, idDat) {
 /**
  * Lấy toàn bộ món ăn trong tab DATMON để xem và kiểm tra
  */
-function getAllActiveMenusFromDatMon(ss) {
+function getAllActiveMenusFromDatMon(ss, options) {
   var sheet = getOrCreateDatMonSheet(ss);
   if (!sheet) return [];
   // Tự động dồn các dòng trống nếu dữ liệu bị trôi xuống xa (dòng 1001)
@@ -1305,14 +1464,32 @@ function getAllActiveMenusFromDatMon(ss) {
   var headers = data[0];
   var colMap = mapDatMonColumns(headers);
   var list = [];
+  options = options || {};
+  var filterDate = (options.date || "ALL").toString().trim();
+  var filterIds = {};
+  var rawIds = Array.isArray(options.idDats)
+    ? options.idDats
+    : (options.idDats || "").toString().split(/[,;\n]+/);
+  for (var f = 0; f < rawIds.length; f++) {
+    var filterId = (rawIds[f] || "").toString().trim().toUpperCase();
+    if (filterId) filterIds[filterId] = true;
+  }
+  var hasIdFilter = Object.keys(filterIds).length > 0;
+  var filterDateParts = filterDate !== "ALL" ? parseDatePartsGS(filterDate) : null;
+  var filterDateCompact = filterDateParts
+    ? filterDateParts.y + ("0" + filterDateParts.m).slice(-2) + ("0" + filterDateParts.d).slice(-2)
+    : "";
 
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
     var dispRow = displayData[i] || [];
     var rowIdDat = row[colMap.id_dat] ? row[colMap.id_dat].toString().trim() : "";
     var trangThai = row[colMap.trang_thai_mon] ? row[colMap.trang_thai_mon].toString().trim().toUpperCase() : "ACTIVE";
+    var matchesId = !hasIdFilter || Boolean(filterIds[rowIdDat.toUpperCase()]);
+    var matchesDate = filterDate === "ALL" || areDatesMatchingGS(row[colMap.ngay_dat], filterDate);
+    if (!matchesDate && filterDateCompact && rowIdDat.indexOf(filterDateCompact) !== -1) matchesDate = true;
 
-    if (rowIdDat && trangThai !== "ĐÃ XÓA") {
+    if (rowIdDat && trangThai !== "ĐÃ XÓA" && matchesId && matchesDate) {
       var donGia = row[colMap.don_gia] ? (Number(row[colMap.don_gia].toString().replace(/[^\d]/g, "")) || 0) : 0;
       var soLuong = row[colMap.so_luong] ? (Number(row[colMap.so_luong]) || 1) : 1;
       var thanhTien = row[colMap.thanh_tien] ? (Number(row[colMap.thanh_tien].toString().replace(/[^\d]/g, "")) || (donGia * soLuong)) : (donGia * soLuong);
@@ -1432,23 +1609,22 @@ function updateDatMonTableList(ss, idDat, newBanStr) {
     firstBan = bParts[0] || formattedBanStr;
   }
 
-  var updatedCount = 0;
+  var tableListRanges = [];
+  var tableNameRanges = [];
   var targetId = (idDat || "").toString().trim().toLowerCase();
   for (var i = 1; i < data.length; i++) {
     var rId = data[i][colMap.id_dat] ? data[i][colMap.id_dat].toString().trim().toLowerCase() : "";
     if (rId && targetId && rId === targetId) {
       if (colMap.danh_sach_ban >= 0) {
-        sheet.getRange(i + 1, colMap.danh_sach_ban + 1).setValue(formattedBanStr);
+        tableListRanges.push(sheet.getRange(i + 1, colMap.danh_sach_ban + 1).getA1Notation());
       }
       if (colMap.ten_ban >= 0 && firstBan) {
-        sheet.getRange(i + 1, colMap.ten_ban + 1).setValue(firstBan);
+        tableNameRanges.push(sheet.getRange(i + 1, colMap.ten_ban + 1).getA1Notation());
       }
-      updatedCount++;
     }
   }
-  if (updatedCount > 0) {
-    SpreadsheetApp.flush();
-  }
+  if (tableListRanges.length > 0) sheet.getRangeList(tableListRanges).setValue(formattedBanStr);
+  if (tableNameRanges.length > 0) sheet.getRangeList(tableNameRanges).setValue(firstBan);
 }
 
 /**
@@ -1539,7 +1715,9 @@ function handleAddMenuGS(ss, data) {
   // Tìm dòng trống đầu tiên từ dòng 2 trở đi để ghi liên tục, không bị nhảy xuống dòng 1001
   var targetRow = findFirstEmptyRowInSheet(sheet, colMap.id_dat + 1);
 
-  // GHI CHÍNH XÁC MỖI MÓN LÀ 1 DÒNG DUY NHẤT VÀO VỊ TRÍ LIÊN TỤC TIẾP THEO
+  var newRows = [];
+
+  // Tạo toàn bộ dữ liệu trong bộ nhớ rồi ghi một lần để giảm số lượt gọi Google Sheets.
   items.forEach(function(item) {
     count++;
     var idMon = idDat + "-M" + ("0" + count).slice(-2);
@@ -1567,12 +1745,7 @@ function handleAddMenuGS(ss, data) {
     rowArray[colMap.id_mon] = idMon;
     rowArray[colMap.trang_thai_mon] = "ACTIVE";
 
-    // Đảm bảo sheet có đủ hàng
-    if (targetRow > sheet.getMaxRows()) {
-      sheet.insertRowsAfter(sheet.getMaxRows(), 10);
-    }
-    sheet.getRange(targetRow, 1, 1, rowArray.length).setValues([rowArray]);
-    targetRow++;
+    newRows.push(rowArray);
 
     addedItems.push({
       id_mon: idMon,
@@ -1592,6 +1765,12 @@ function handleAddMenuGS(ss, data) {
       trang_thai_mon: "ACTIVE"
     });
   });
+
+  var requiredLastRow = targetRow + newRows.length - 1;
+  if (requiredLastRow > sheet.getMaxRows()) {
+    sheet.insertRowsAfter(sheet.getMaxRows(), requiredLastRow - sheet.getMaxRows());
+  }
+  sheet.getRange(targetRow, 1, newRows.length, maxColIdx).setValues(newRows);
 
   return {
     status: "success",
@@ -1974,14 +2153,21 @@ function updateViewBepHomNay(ss) {
   var allRange = viewSheet.getRange(1, 1, outputData.length, headers.length);
   allRange.setBorder(true, true, true, true, true, true, "#cbd5e1", SpreadsheetApp.BorderStyle.SOLID);
 
-  // Tô màu nổi bật các dòng có Ghi chú bếp (vàng/cam)
+  // Tô màu cột ghi chú bằng một lần ghi thay vì gọi API cho từng ô.
+  var noteBackgrounds = [];
+  var noteFontColors = [];
+  var noteFontWeights = [];
   for (var rowIdx = 1; rowIdx < outputData.length; rowIdx++) {
-    var noteVal = outputData[rowIdx][5]; // Cột GHI CHÚ ĐẦU BẾP
-    if (noteVal && noteVal.toString().trim() !== "" && noteVal.toString().trim() !== "-") {
-      var noteCell = viewSheet.getRange(rowIdx + 1, 6);
-      noteCell.setBackground("#fef3c7").setFontColor("#b45309").setFontWeight("bold");
-    }
+    var noteVal = outputData[rowIdx][5];
+    var hasNote = noteVal && noteVal.toString().trim() !== "" && noteVal.toString().trim() !== "-";
+    noteBackgrounds.push([hasNote ? "#fef3c7" : null]);
+    noteFontColors.push([hasNote ? "#b45309" : null]);
+    noteFontWeights.push([hasNote ? "bold" : "normal"]);
   }
+  viewSheet.getRange(2, 6, outputData.length - 1, 1)
+           .setBackgrounds(noteBackgrounds)
+           .setFontColors(noteFontColors)
+           .setFontWeights(noteFontWeights);
 
   viewSheet.setFrozenRows(1);
   viewSheet.autoResizeColumns(1, headers.length);
@@ -2024,6 +2210,12 @@ function onEdit(e) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = e && e.range ? e.range.getSheet() : null;
     var sName = sheet ? sheet.getName().toUpperCase() : "";
+    if (sName === "DATBAN" || sName === "DATMON" || sName === "CONFIG_BAN") {
+      invalidateSodobaDynamicCache();
+    }
+    if (sName === "MENU_MON" || sName === "CONFIG_MON") {
+      invalidateSodobaMasterMenuCache();
+    }
     if (sName === "DATBAN" || sName === "DATMON") {
       syncAllViewsSafely(ss);
     }
@@ -2038,10 +2230,10 @@ function onEdit(e) {
 function onChange(e) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
+    invalidateSodobaDynamicCache();
+    invalidateSodobaMasterMenuCache();
     syncAllViewsSafely(ss);
   } catch (err) {
     Logger.log("onChange error: " + err);
   }
 }
-
-

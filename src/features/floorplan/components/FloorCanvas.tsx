@@ -18,7 +18,7 @@ interface FloorCanvasProps {
   onChangeDate?: (date: string) => void;
 }
 
-export const FloorCanvas: React.FC<FloorCanvasProps> = ({
+export const FloorCanvas: React.FC<FloorCanvasProps> = React.memo(({
   tables,
   statusMap,
   selectedTables,
@@ -277,5 +277,6 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = ({
       </div>
     </div>
   );
-};
+});
 
+FloorCanvas.displayName = 'FloorCanvas';

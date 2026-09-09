@@ -25,6 +25,14 @@ interface LocalDatabase {
   masterMenus: MasterMenuItem[];
 }
 
+interface DatMonQueryOptions {
+  selectedDate?: string;
+  bookingIds?: string[];
+  forceRefresh?: boolean;
+}
+
+class GasBusinessError extends Error {}
+
 function initializeLocalStorage(): LocalDatabase {
   if (typeof window === 'undefined') {
     return {
@@ -174,11 +182,23 @@ function initializeLocalStorage(): LocalDatabase {
 
 class GasApiService {
   private apiUrl: string = API_DATBAN_URL;
+  private inFlightGets = new Map<string, Promise<unknown>>();
+  private viewRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private isViewRefreshRunning = false;
+  private viewRefreshQueued = false;
 
   constructor() {
     if (typeof window !== 'undefined') {
       const customUrl = localStorage.getItem(STORAGE_KEY_CUSTOM_GAS_URL);
-      if (customUrl) {
+      const legacyDefaultUrls = new Set([
+        'https://script.google.com/macros/s/AKfycbxKALnR9uZHuV-Ag1LMXz2pUU3iFX0ENMZMafZBeX6ONjPxje9xXoDi9nag02gZPDY/exec',
+        'https://script.google.com/macros/s/AKfycbx1Cbt9OASJt2qKmOU5eSE05fiNXRtCWIXstnMbMN9cJ0Pth3SC__DndTnFfHdlVmMi/exec',
+      ]);
+      const isLegacyDefaultUrl = Boolean(customUrl && legacyDefaultUrls.has(customUrl));
+      // Tự chuyển URL mặc định cũ sang deployment mới, nhưng vẫn tôn trọng URL tùy chỉnh khác.
+      if (customUrl && (customUrl.includes('MOCK_SODOBA_S8') || isLegacyDefaultUrl)) {
+        localStorage.setItem(STORAGE_KEY_CUSTOM_GAS_URL, API_DATBAN_URL);
+      } else if (customUrl) {
         this.apiUrl = customUrl;
       }
     }
@@ -200,15 +220,164 @@ class GasApiService {
   }
 
   /**
+   * Gom các GET trùng nhau (đặc biệt khi React StrictMode khởi tạo 2 lần)
+   * để chỉ tạo một request tới Google Apps Script.
+   */
+  private async fetchJsonDeduped<T>(url: string): Promise<T> {
+    const existing = this.inFlightGets.get(url) as Promise<T> | undefined;
+    if (existing) return existing;
+
+    const request = fetch(url, { method: 'GET' }).then(async (response) => {
+      if (!response.ok) throw new Error(`Network error (${response.status})`);
+      return response.json() as Promise<T>;
+    });
+
+    this.inFlightGets.set(url, request);
+    try {
+      return await request;
+    } finally {
+      if (this.inFlightGets.get(url) === request) {
+        this.inFlightGets.delete(url);
+      }
+    }
+  }
+
+  /** Đọc cache gần nhất ngay lập tức, không phát sinh request mạng. */
+  public getCachedTableStatusMap(): Record<string, TableStatusClass> {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEY_TABLES);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+        } catch {
+          // Đọc tiếp fallback bên dưới.
+        }
+      }
+    }
+    return this.isUsingRealGas() ? {} : initializeLocalStorage().tableStatusMap;
+  }
+
+  public getCachedBookings(selectedDate?: string): BookingPayload[] {
+    let list: BookingPayload[] = [];
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEY_BOOKINGS);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) list = parsed;
+        } catch {
+          list = [];
+        }
+      }
+    }
+    if (!this.isUsingRealGas() && list.length === 0) {
+      list = initializeLocalStorage().bookings;
+    }
+    if (selectedDate && selectedDate !== 'ALL') {
+      return list.filter((booking) => isDateMatching(booking.ngay_dat, selectedDate));
+    }
+    return list;
+  }
+
+  public getCachedOrderMenus(idDat: string): OrderMenuItem[] {
+    return this.getCachedAllDatMonMenus().filter(
+      (item) => item.id_dat === idDat && item.trang_thai_mon !== 'ĐÃ XÓA'
+    );
+  }
+
+  public getCachedAllDatMonMenus(options: Omit<DatMonQueryOptions, 'forceRefresh'> = {}): OrderMenuItem[] {
+    let list: OrderMenuItem[] = [];
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEY_ORDER_MENUS);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            list = parsed.filter((item) => item.trang_thai_mon !== 'ĐÃ XÓA');
+          }
+        } catch {
+          // Đọc tiếp fallback bên dưới.
+        }
+      }
+    }
+    if (!this.isUsingRealGas() && list.length === 0) {
+      list = initializeLocalStorage().orderMenus.filter((item) => item.trang_thai_mon !== 'ĐÃ XÓA');
+    }
+
+    const bookingIdSet = new Set((options.bookingIds || []).filter(Boolean));
+    if (bookingIdSet.size > 0) {
+      list = list.filter((item) => bookingIdSet.has(item.id_dat));
+    }
+    if (options.selectedDate && options.selectedDate !== 'ALL') {
+      const compactDate = normalizeDateString(options.selectedDate).replace(/-/g, '');
+      list = list.filter(
+        (item) => isDateMatching(item.ngay_dat, options.selectedDate) || Boolean(compactDate && item.id_dat.includes(compactDate))
+      );
+    }
+    return list;
+  }
+
+  public getCachedMasterMenus(): MasterMenuItem[] {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(STORAGE_KEY_MASTER_MENUS);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) return parsed;
+        } catch {
+          // Đọc tiếp fallback bên dưới.
+        }
+      }
+    }
+    return this.isUsingRealGas() ? [] : initializeLocalStorage().masterMenus;
+  }
+
+  /**
+   * Cập nhật VIEW ở request nền sau khi thao tác chính đã trả kết quả.
+   * Chỉ chạy khi backend xác nhận có hỗ trợ defer_views để tương thích bản GAS cũ.
+   */
+  private queueSheetViewsRefresh() {
+    if (!this.isUsingRealGas() || typeof window === 'undefined') return;
+    this.viewRefreshQueued = true;
+    if (this.viewRefreshTimer) clearTimeout(this.viewRefreshTimer);
+    this.viewRefreshTimer = setTimeout(() => {
+      this.viewRefreshTimer = null;
+      void this.flushSheetViewsRefresh();
+    }, 120);
+  }
+
+  private async flushSheetViewsRefresh(): Promise<void> {
+    if (this.isViewRefreshRunning || !this.viewRefreshQueued) return;
+    this.isViewRefreshRunning = true;
+    this.viewRefreshQueued = false;
+    try {
+      await fetch(this.apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'UPDATE_VIEWS' }),
+        keepalive: true,
+      });
+    } catch (error) {
+      console.warn('Không thể cập nhật VIEW ở chế độ nền:', error);
+    } finally {
+      this.isViewRefreshRunning = false;
+      if (this.viewRefreshQueued) this.queueSheetViewsRefresh();
+    }
+  }
+
+  /**
    * 1. GET: Lấy bản đồ trạng thái bàn từ CONFIG_BAN / DATBAN
    */
-  async getTableStatusMap(selectedDate?: string): Promise<Record<string, TableStatusClass>> {
+  async getTableStatusMap(selectedDate?: string, forceRefresh = false): Promise<Record<string, TableStatusClass>> {
     if (this.isUsingRealGas()) {
       try {
-        const queryParam = selectedDate ? `?date=${encodeURIComponent(selectedDate)}` : '';
-        const response = await fetch(`${this.apiUrl}${queryParam}`, { method: 'GET' });
-        if (!response.ok) throw new Error('Network error fetching status');
-        const rawData = await response.json();
+        const query = new URLSearchParams();
+        if (selectedDate) query.set('date', selectedDate);
+        if (forceRefresh) query.set('force_refresh', 'true');
+        const queryString = query.toString();
+        const queryParam = queryString ? `?${queryString}` : '';
+        const rawData = await this.fetchJsonDeduped<any>(`${this.apiUrl}${queryParam}`);
 
         let rawMap: Record<string, any> = {};
         if (rawData.statusMap && typeof rawData.statusMap === 'object') {
@@ -223,9 +392,12 @@ class GasApiService {
 
         // Đồng bộ danh sách đặt bàn nếu GAS trả về kèm bookings hoặc detailsMap
         let bookingList: any[] = [];
+        let hasBookingPayload = false;
         if (Array.isArray(rawData.bookings)) {
+          hasBookingPayload = true;
           bookingList = rawData.bookings;
         } else if (rawData.detailsMap && typeof rawData.detailsMap === 'object') {
+          hasBookingPayload = true;
           const seen = new Set<string>();
           Object.values(rawData.detailsMap).forEach((item: any) => {
             if (item && item.id_dat && item.id_dat !== 'N/A' && !seen.has(item.id_dat)) {
@@ -234,10 +406,11 @@ class GasApiService {
             }
           });
         } else if (Array.isArray(rawData.data)) {
+          hasBookingPayload = true;
           bookingList = rawData.data;
         }
 
-        if (bookingList && bookingList.length > 0) {
+        if (hasBookingPayload) {
           const parsedBookings: BookingPayload[] = bookingList.map((item: any) => ({
             id_dat: String(item.id_dat || ''),
             ngay_dat: normalizeDateString(item.ngay_dat),
@@ -320,19 +493,72 @@ class GasApiService {
       return { status: 'success', data: items as unknown as T };
     }
 
+    const cacheSnapshot = this.isUsingRealGas() && typeof window !== 'undefined'
+      ? [STORAGE_KEY_TABLES, STORAGE_KEY_BOOKINGS, STORAGE_KEY_ORDER_MENUS].map(
+          (key) => [key, localStorage.getItem(key)] as const
+        )
+      : [];
+
     // Luôn thực thi cập nhật local state trước để UI mượt mà (<50ms Optimistic UI)
     const localResult = await this.executeLocalAction<T>(payload);
 
     if (this.isUsingRealGas()) {
       try {
+        const remotePayload = { ...payload, defer_views: true };
         const response = await fetch(this.apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(remotePayload),
         });
         const resJson = await response.json();
+        const remoteStatus = String(resJson?.status || '').toLowerCase();
+        if (remoteStatus && remoteStatus !== 'success') {
+          cacheSnapshot.forEach(([key, value]) => {
+            if (value === null) localStorage.removeItem(key);
+            else localStorage.setItem(key, value);
+          });
+          throw new GasBusinessError(resJson?.message || `GAS từ chối thao tác ${payload.action}`);
+        }
+        if (resJson?.views_deferred === true) {
+          this.queueSheetViewsRefresh();
+        }
+
+        // BOOK được tạo local trước để UI tức thì. Đồng bộ lại ID chính thức do Sheet cấp.
+        if (payload.action === 'BOOK' && resJson?.id_dat && localResult.data) {
+          const localBooking = localResult.data as unknown as BookingPayload;
+          const remoteBooking = { ...localBooking, id_dat: String(resJson.id_dat) };
+          const cachedBookings = this.getCachedBookings('ALL').map((booking) =>
+            booking.id_dat === localBooking.id_dat ? remoteBooking : booking
+          );
+          localStorage.setItem(STORAGE_KEY_BOOKINGS, JSON.stringify(cachedBookings));
+          return { ...resJson, data: remoteBooking as unknown as T };
+        }
+
+        // ADD_MENU: thay ID tạm trong cache bằng ID chính thức từ DATMON mà không cần GET lại.
+        if (payload.action === 'ADD_MENU' && Array.isArray(resJson?.items) && Array.isArray(localResult.data)) {
+          const localItems = localResult.data as unknown as OrderMenuItem[];
+          const remoteItems = resJson.items as OrderMenuItem[];
+          const idMap = new Map<string, OrderMenuItem>();
+          localItems.forEach((item, index) => {
+            if (remoteItems[index]) idMap.set(item.id_mon, remoteItems[index]);
+          });
+          if (typeof window !== 'undefined') {
+            const stored = localStorage.getItem(STORAGE_KEY_ORDER_MENUS);
+            if (stored) {
+              try {
+                const cached = JSON.parse(stored) as OrderMenuItem[];
+                const reconciled = cached.map((item) => idMap.get(item.id_mon) || item);
+                localStorage.setItem(STORAGE_KEY_ORDER_MENUS, JSON.stringify(reconciled));
+              } catch {
+                // Cache tạm không hợp lệ không ảnh hưởng kết quả đã lưu trên Sheet.
+              }
+            }
+          }
+          return { ...resJson, data: remoteItems as unknown as T };
+        }
         return resJson;
       } catch (error) {
+        if (error instanceof GasBusinessError) throw error;
         console.warn(`GAS Action [${payload.action}] failed over network, local state preserved:`, error);
       }
     }
@@ -398,6 +624,7 @@ class GasApiService {
     if (action === 'UPDATE_STATUS') {
       const tableList = (payload.danh_sach_ban as string[]) || [];
       const trangThai = String(payload.trang_thai || '');
+      const targetDate = payload.ngay_dat ? String(payload.ngay_dat) : '';
       let mappedStatus: TableStatusClass = 'empty';
 
       if (trangThai === 'ĐÃ XÁC NHẬN') mappedStatus = 'confirmed';
@@ -428,7 +655,8 @@ class GasApiService {
       // Update related bookings status in DATBAN
       db.bookings = db.bookings.map((b) => {
         const hasTable = b.danh_sach_ban.some((t) => tableList.includes(t));
-        if (hasTable && b.trang_thai !== 'HỦY') {
+        const hasDate = !targetDate || isDateMatching(b.ngay_dat, targetDate);
+        if (hasTable && hasDate && b.trang_thai !== 'HỦY') {
           return { ...b, trang_thai: trangThai };
         }
         return b;
@@ -801,15 +1029,14 @@ class GasApiService {
   }
 
   // Get all bookings from real GAS or local store
-  async getAllBookings(selectedDate?: string): Promise<BookingPayload[]> {
+  async getAllBookings(selectedDate?: string, forceRefresh = false): Promise<BookingPayload[]> {
     if (this.isUsingRealGas()) {
       try {
-        const queryParam = selectedDate && selectedDate !== 'ALL'
-          ? `?action=GET_BOOKINGS&date=${encodeURIComponent(selectedDate)}`
-          : `?action=GET_BOOKINGS`;
-        const response = await fetch(`${this.apiUrl}${queryParam}`, { method: 'GET' });
-        if (response.ok) {
-          const res = await response.json();
+        const query = new URLSearchParams({ action: 'GET_BOOKINGS' });
+        if (selectedDate && selectedDate !== 'ALL') query.set('date', selectedDate);
+        if (forceRefresh) query.set('force_refresh', 'true');
+        const res = await this.fetchJsonDeduped<any>(`${this.apiUrl}?${query.toString()}`);
+        {
           let rawList: any[] = [];
           if (Array.isArray(res)) {
             rawList = res;
@@ -872,15 +1099,16 @@ class GasApiService {
     return db.bookings;
   }
 
-  // Lấy toàn bộ danh sách món ăn từ tab DATMON của Google Sheet
-  async getAllDatMonMenus(): Promise<OrderMenuItem[]> {
+  // Lấy danh sách món từ DATMON; hỗ trợ lọc theo ngày/đơn nhưng vẫn tương thích chế độ ALL.
+  async getAllDatMonMenus(options: DatMonQueryOptions = {}): Promise<OrderMenuItem[]> {
     if (this.isUsingRealGas()) {
       try {
-        const response = await fetch(`${this.apiUrl}?action=GET_ALL_DATMON`, {
-          method: 'GET',
-        });
-        if (response.ok) {
-          const res = await response.json();
+        const query = new URLSearchParams({ action: 'GET_ALL_DATMON' });
+        if (options.selectedDate && options.selectedDate !== 'ALL') query.set('date', options.selectedDate);
+        if (options.bookingIds && options.bookingIds.length > 0) query.set('id_dats', options.bookingIds.join(','));
+        if (options.forceRefresh) query.set('force_refresh', 'true');
+        const res = await this.fetchJsonDeduped<any>(`${this.apiUrl}?${query.toString()}`);
+        {
           const list = Array.isArray(res) ? res : res.data || [];
           if (Array.isArray(list)) {
             const parsed = list
@@ -904,37 +1132,55 @@ class GasApiService {
                   ten_khach: m.ten_khach ? String(m.ten_khach) : undefined,
                 };
               });
-            localStorage.setItem(STORAGE_KEY_ORDER_MENUS, JSON.stringify(parsed));
-            return parsed;
+            const requestedIds = new Set((options.bookingIds || []).filter(Boolean));
+            const compactDate = options.selectedDate && options.selectedDate !== 'ALL'
+              ? normalizeDateString(options.selectedDate).replace(/-/g, '')
+              : '';
+            // Lọc lại ở client để tương thích deployment GAS cũ chưa hiểu date/id_dats.
+            const scoped = parsed.filter((item) => {
+              const matchesId = requestedIds.size === 0 || requestedIds.has(item.id_dat);
+              const matchesDate = !options.selectedDate
+                || options.selectedDate === 'ALL'
+                || isDateMatching(item.ngay_dat, options.selectedDate)
+                || Boolean(compactDate && item.id_dat.includes(compactDate));
+              return matchesId && matchesDate;
+            });
+            const isAllRequest = (!options.selectedDate || options.selectedDate === 'ALL') && requestedIds.size === 0;
+            const existing = this.getCachedAllDatMonMenus();
+            const merged = isAllRequest
+              ? scoped
+              : [
+                  ...existing.filter((item) => {
+                    const matchesId = requestedIds.size === 0 || requestedIds.has(item.id_dat);
+                    const matchesDate = !options.selectedDate
+                      || options.selectedDate === 'ALL'
+                      || isDateMatching(item.ngay_dat, options.selectedDate)
+                      || Boolean(compactDate && item.id_dat.includes(compactDate));
+                    return !(matchesId && matchesDate);
+                  }),
+                  ...scoped,
+                ];
+            localStorage.setItem(STORAGE_KEY_ORDER_MENUS, JSON.stringify(merged));
+            return scoped;
           }
         }
       } catch (err) {
         console.warn('Lỗi khi lấy toàn bộ DATMON từ GAS:', err);
-        const stored = localStorage.getItem(STORAGE_KEY_ORDER_MENUS);
-        if (stored) {
-          try {
-            return JSON.parse(stored);
-          } catch {
-            return [];
-          }
-        }
-        return [];
+        return this.getCachedAllDatMonMenus(options);
       }
     }
 
-    const db = initializeLocalStorage();
-    return db.orderMenus.filter((m) => m.trang_thai_mon !== 'ĐÃ XÓA');
+    return this.getCachedAllDatMonMenus(options);
   }
 
   // Get order menus (DATMON) for a specific booking from real GAS or local store
-  async getOrderMenus(idDat: string): Promise<OrderMenuItem[]> {
+  async getOrderMenus(idDat: string, forceRefresh = false): Promise<OrderMenuItem[]> {
     if (this.isUsingRealGas()) {
       try {
-        const response = await fetch(`${this.apiUrl}?action=GET_MENUS&id_dat=${encodeURIComponent(idDat)}`, {
-          method: 'GET',
-        });
-        if (response.ok) {
-          const res = await response.json();
+        const query = new URLSearchParams({ action: 'GET_MENUS', id_dat: idDat });
+        if (forceRefresh) query.set('force_refresh', 'true');
+        const res = await this.fetchJsonDeduped<any>(`${this.apiUrl}?${query.toString()}`);
+        {
           const list = Array.isArray(res) ? res : res.data || [];
           if (Array.isArray(list)) {
             const activeDishes: OrderMenuItem[] = list
@@ -988,12 +1234,13 @@ class GasApiService {
   }
 
   // Get master menu list (MENU_MON) with real-time INACTIVATE status from sheet
-  async getMasterMenus(): Promise<MasterMenuItem[]> {
+  async getMasterMenus(forceRefresh = false): Promise<MasterMenuItem[]> {
     if (this.isUsingRealGas()) {
       try {
-        const response = await fetch(`${this.apiUrl}?action=GET_MENU_MON`, { method: 'GET' });
-        if (response.ok) {
-          const res = await response.json();
+        const query = new URLSearchParams({ action: 'GET_MENU_MON' });
+        if (forceRefresh) query.set('force_refresh', 'true');
+        const res = await this.fetchJsonDeduped<any>(`${this.apiUrl}?${query.toString()}`);
+        {
           const list = Array.isArray(res) ? res : res.data || [];
           if (Array.isArray(list) && list.length > 0) {
             const mapped: MasterMenuItem[] = list.map((item: any) => {
