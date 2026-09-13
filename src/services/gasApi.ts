@@ -367,6 +367,125 @@ class GasApiService {
   }
 
   /**
+   * 0. KIỂM TRA KẾT NỐI SIÊU TỐC (Unified Health Check)
+   * Gọi action=TEST_CONNECTION để lấy đầy đủ trạng thái bàn, đơn đặt và món ăn
+   * chỉ trong 1 round-trip duy nhất (giảm từ ~9s xuống ~1s)!
+   */
+  async testConnection(): Promise<{
+    statusMap: Record<string, TableStatusClass>;
+    bookings: BookingPayload[];
+    datMonItems: OrderMenuItem[];
+    serverDuration?: number;
+    rawCounts?: { specialTables: number; totalBookings: number; totalDatMon: number };
+  }> {
+    if (!this.isUsingRealGas()) {
+      const db = initializeLocalStorage();
+      const statusMap = this.getCachedTableStatusMap();
+      return {
+        statusMap,
+        bookings: db.bookings,
+        datMonItems: db.orderMenus,
+        serverDuration: 12,
+        rawCounts: {
+          specialTables: Object.keys(statusMap).length,
+          totalBookings: db.bookings.length,
+          totalDatMon: db.orderMenus.length,
+        },
+      };
+    }
+
+    try {
+      // 1. Thử gọi action=TEST_CONNECTION siêu tốc (1 request duy nhất)
+      const query = new URLSearchParams({ action: 'TEST_CONNECTION', force_refresh: 'true' });
+      const res = await this.fetchJsonDeduped<any>(`${this.apiUrl}?${query.toString()}`);
+
+      if (res && (res.status === 'success' || res.statusMap || res.bookings)) {
+        const rawMap: Record<string, any> = res.statusMap || res.tableStatusMap || res.data || {};
+        const normalizedMap: Record<string, TableStatusClass> = {};
+        const metaKeys = new Set(['status', 'message', 'statusmap', 'detailsmap', 'bookings', 'data', 'counts', 'sheets', 'duration_ms']);
+
+        Object.entries(rawMap).forEach(([rawKey, val]) => {
+          if (metaKeys.has(rawKey.toLowerCase())) return;
+          const normKey = normalizeTableId(rawKey);
+          if (!normKey) return;
+          const normVal = mapTrangThaiToTableStatus(String(val));
+          if (normVal !== 'empty') {
+            normalizedMap[normKey] = normVal;
+            const bCode = `B${('0' + normKey).slice(-2)}`;
+            normalizedMap[bCode] = normVal;
+          }
+        });
+
+        // Parse bookings
+        const rawBookings: any[] = Array.isArray(res.bookings) ? res.bookings : [];
+        const parsedBookings: BookingPayload[] = rawBookings.map((item: any) => ({
+          id_dat: String(item.id_dat || ''),
+          ngay_dat: normalizeDateString(item.ngay_dat),
+          gio_dat: String(item.gio_dat || ''),
+          ten_khach: String(item.ten_khach || ''),
+          sdt: String(item.sdt || ''),
+          so_khach: Number(item.so_khach) || 0,
+          tien_coc: Number(item.tien_coc || item.Tien_coc || item.so_tien_coc) || 0,
+          ghi_chu: String(item.ghi_chu || ''),
+          danh_sach_ban: parseTableList(item.danh_sach_ban || item.danh_sach_ban_raw),
+          nguoi_nhap: String(item.nguoi_nhap || ''),
+          trang_thai: String(item.trang_thai || 'ĐÃ ĐẶT'),
+          created_at: item.created_at || new Date().toISOString(),
+        }));
+
+        // Parse datMon
+        const rawDatMon: any[] = Array.isArray(res.datMonItems) ? res.datMonItems : [];
+        const parsedDatMon: OrderMenuItem[] = rawDatMon
+          .filter((m: any) => m.trang_thai_mon !== 'ĐÃ XÓA')
+          .map((m: any) => ({
+            id_mon: String(m.id_mon || ''),
+            id_dat: String(m.id_dat || ''),
+            ten_mon: String(m.ten_mon || ''),
+            so_luong: Number(m.so_luong) || 1,
+            don_gia: Number(m.don_gia) || 0,
+            thanh_tien: Number(m.thanh_tien) || (Number(m.don_gia) || 0) * (Number(m.so_luong) || 1),
+            ghi_chu: String(m.ghi_chu || ''),
+            ngay_dat: m.ngay_dat ? String(m.ngay_dat) : undefined,
+            ten_khach: m.ten_khach ? String(m.ten_khach) : undefined,
+            ten_ban: m.ten_ban ? String(m.ten_ban) : undefined,
+            trang_thai_mon: 'ACTIVE' as const,
+          }));
+
+        // Lưu vào cache cục bộ
+        localStorage.setItem(STORAGE_KEY_TABLES, JSON.stringify(normalizedMap));
+        if (parsedBookings.length > 0) {
+          localStorage.setItem(STORAGE_KEY_BOOKINGS, JSON.stringify(parsedBookings));
+        }
+        if (parsedDatMon.length > 0) {
+          localStorage.setItem(STORAGE_KEY_ORDER_MENUS, JSON.stringify(parsedDatMon));
+        }
+
+        return {
+          statusMap: normalizedMap,
+          bookings: parsedBookings,
+          datMonItems: parsedDatMon,
+          serverDuration: res.duration_ms,
+          rawCounts: res.counts,
+        };
+      }
+    } catch (errFast) {
+      console.warn('Lỗi gọi TEST_CONNECTION nhanh, chuyển sang fallback:', errFast);
+    }
+
+    // 2. Fallback cho phiên bản Code.gs cũ: Chỉ gọi 2 GET (thay vì 3)
+    const [statusMap, datMonItems] = await Promise.all([
+      this.getTableStatusMap(undefined, true),
+      this.getAllDatMonMenus({ forceRefresh: true }),
+    ]);
+    const bookings = this.getCachedBookings('ALL');
+    return {
+      statusMap,
+      bookings,
+      datMonItems,
+    };
+  }
+
+  /**
    * 1. GET: Lấy bản đồ trạng thái bàn từ CONFIG_BAN / DATBAN
    */
   async getTableStatusMap(selectedDate?: string, forceRefresh = false): Promise<Record<string, TableStatusClass>> {
@@ -425,7 +544,27 @@ class GasApiService {
             trang_thai: String(item.trang_thai || 'ĐÃ ĐẶT'),
             created_at: item.created_at || new Date().toISOString(),
           }));
-          localStorage.setItem(STORAGE_KEY_BOOKINGS, JSON.stringify(parsedBookings));
+
+          // Đồng bộ bảo toàn: Không xóa mất đơn của ngày khác hoặc đơn mới đặt trong 5 phút gần đây
+          const existingBookings = this.getCachedBookings('ALL');
+          const nowMs = Date.now();
+          const remoteIdSet = new Set(parsedBookings.map((b) => b.id_dat));
+
+          const preservedBookings = existingBookings.filter((b) => {
+            if (remoteIdSet.has(b.id_dat)) return false;
+            if (selectedDate && selectedDate !== 'ALL' && !isDateMatching(b.ngay_dat, selectedDate)) {
+              return true; // Khác ngày đang xem -> giữ nguyên
+            }
+            // Đơn mới tạo trong vòng 5 phút hoặc tạm thời
+            const createdAtMs = b.created_at ? new Date(b.created_at).getTime() : 0;
+            if (b.id_dat.includes('TEMP') || (nowMs - createdAtMs < 300000)) {
+              return true;
+            }
+            return false;
+          });
+
+          const mergedBookings = [...parsedBookings, ...preservedBookings];
+          localStorage.setItem(STORAGE_KEY_BOOKINGS, JSON.stringify(mergedBookings));
         }
 
         // Chuẩn hóa key mã bàn (B01 -> 1, B54 -> 54, 70 -> VIP70) và giá trị trạng thái
@@ -527,10 +666,14 @@ class GasApiService {
         if (payload.action === 'BOOK' && resJson?.id_dat && localResult.data) {
           const localBooking = localResult.data as unknown as BookingPayload;
           const remoteBooking = { ...localBooking, id_dat: String(resJson.id_dat) };
-          const cachedBookings = this.getCachedBookings('ALL').map((booking) =>
-            booking.id_dat === localBooking.id_dat ? remoteBooking : booking
+          const cachedBookings = this.getCachedBookings('ALL');
+          const exists = cachedBookings.some(
+            (b) => b.id_dat === localBooking.id_dat || b.id_dat === remoteBooking.id_dat
           );
-          localStorage.setItem(STORAGE_KEY_BOOKINGS, JSON.stringify(cachedBookings));
+          const updatedBookings = exists
+            ? cachedBookings.map((b) => (b.id_dat === localBooking.id_dat ? remoteBooking : b))
+            : [remoteBooking, ...cachedBookings];
+          localStorage.setItem(STORAGE_KEY_BOOKINGS, JSON.stringify(updatedBookings));
           return { ...resJson, data: remoteBooking as unknown as T };
         }
 

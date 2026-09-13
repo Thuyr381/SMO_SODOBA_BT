@@ -410,15 +410,21 @@ export default function App() {
       triggerNotificationHaptic('warning');
       showToast('Hủy đặt bàn', `Bàn ${tableIds.join(', ')} đã chuyển về trạng thái TRỐNG`, 'warning');
       
+      // Tìm booking tương ứng để truyền cả id_dat giúp Sheet đối chiếu chính xác tuyệt đối
+      const matchedBooking = bookings.find((b) =>
+        b.danh_sach_ban && b.danh_sach_ban.some((tableCode) => tableIds.includes(tableCode))
+      );
+
       // Return to Default mode immediately
       setActionMode(null);
       setSelectedTables(new Set());
 
       gasApi.sendAction({
         action: 'UPDATE_STATUS',
+        id_dat: matchedBooking?.id_dat,
         danh_sach_ban: tableIds,
         trang_thai: 'HỦY',
-        ngay_dat: selectedDate,
+        ngay_dat: matchedBooking?.ngay_dat || selectedDate,
       }).then(() => {
         refreshBookingsFromCache();
       }).catch((err) => {
@@ -471,6 +477,26 @@ export default function App() {
     // 1. Optimistic UI update (<50ms): Chuyển bàn sang màu booked ngay lập tức
     mutateTableStatusOptimistic(tableIds, 'booked');
     triggerNotificationHaptic('success');
+
+    // Hiển thị ngay tên khách hàng lên sơ đồ bàn tức thì (<1ms)
+    const optimisticBooking: BookingPayload = {
+      id_dat: `S8-TEMP-${Date.now()}`,
+      danh_sach_ban: tableIds,
+      ten_khach: payload.ten_khach,
+      sdt: payload.sdt,
+      ngay_dat: payload.ngay_dat || selectedDate,
+      gio_dat: payload.gio_dat,
+      so_khach: payload.so_khach,
+      tien_coc: payload.tien_coc,
+      ghi_chu: payload.ghi_chu,
+      nguoi_nhap: payload.nguoi_nhap,
+      trang_thai: 'ĐÃ ĐẶT',
+      created_at: new Date().toISOString(),
+    };
+    setBookings((prev) => [
+      optimisticBooking,
+      ...prev.filter((b) => !b.danh_sach_ban.some((t) => tableIds.includes(t))),
+    ]);
     
     // Close modal & return to Default mode immediately
     setIsBookingModalOpen(false);
@@ -496,6 +522,7 @@ export default function App() {
     }).catch((err) => {
       console.error('Lỗi khi lưu đơn đặt bàn:', err);
       rollbackStatus();
+      refreshBookingsFromCache();
       showToast('Lỗi đặt bàn', 'Không thể lưu đơn vào hệ thống, đã hoàn tác', 'error');
     });
   };
@@ -780,11 +807,11 @@ export default function App() {
 
       {/* Main Content Area */}
       <main
-        className={`flex-1 max-w-7xl w-full mx-auto px-1 py-0.5 sm:px-3 sm:py-1 transition-all ${
+        className={`flex-1 max-w-7xl w-full mx-auto px-1 py-0.5 sm:px-3 sm:py-1 transition-all overflow-y-auto overflow-x-hidden ${
           currentView === 'floorplan'
             ? selectedTables.size > 0
               ? 'pb-20'
-              : 'pb-1 overflow-hidden'
+              : 'pb-4'
             : 'pb-24'
         }`}
       >

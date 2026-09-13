@@ -17,6 +17,18 @@ const datMonRows = [
   ['S8-20260909-003', 'S8', 'Món đã xóa', 1, '', '09/09/2026', '20:30', 'B04', 2, 'Test D', 'B04', 50000, 50000, 'S8-20260909-003-M01', 'ĐÃ XÓA'],
 ];
 
+const datBanRows = [
+  ['id_dat', 'ngay_dat', 'gio_dat', 'ten_khach', 'sdt', 'so_khach', 'danh_sach_ban', 'yeu_cau_ban', 'dat_mon_truoc', 'dat_coc', 'tien_coc', 'trang_thai', 'nguoi_nhap', 'thoi_gian_nhap', 'ghi_chu'],
+  ['S8-20260909-001', '09/09/2026', '18:00', 'Khách A', '0901234567', 4, 'B01', '', 'Có', 'Chuyển khoản', 200000, 'ĐÃ ĐẶT', 'Admin', '09/09/2026 10:00:00', ''],
+  ['S8-20260909-002', '09/09/2026', '19:30', 'Khách B', '0912345678', 2, 'B02, B03', '', 'Không', '', 0, 'ĐÃ XÁC NHẬN', 'Admin', '09/09/2026 11:00:00', ''],
+];
+
+const configBanRows = [
+  ['id', 'ma_ban', 'ten_ban', 'khu_vuc', 'suc_chua', 'toa_do_x', 'toa_do_y', 'trang_thai_ban'],
+  ['1', 'B10', 'Bàn 10', 'Khu A', 4, 10, 20, 'BLOCK'],
+  ['2', 'B01', 'Bàn 01', 'Khu A', 4, 10, 40, 'ACTIVE'],
+];
+
 function createRange(rows, row, column, rowCount, columnCount) {
   const sliced = rows
     .slice(row - 1, row - 1 + rowCount)
@@ -29,20 +41,33 @@ function createRange(rows, row, column, rowCount, columnCount) {
   };
 }
 
+function createSheetMock(name, rows) {
+  return {
+    getName: () => name,
+    getLastRow: () => rows.length,
+    getLastColumn: () => rows[0].length,
+    getDataRange: () => createRange(rows, 1, 1, rows.length, rows[0].length),
+    getRange: (row, column, rowCount = 1, columnCount = 1) =>
+      createRange(rows, row, column, rowCount, columnCount),
+  };
+}
+
 function createContext() {
   const cacheStore = new Map();
   const propertyStore = new Map();
-  const sheet = {
-    getName: () => 'DATMON',
-    getLastRow: () => datMonRows.length,
-    getLastColumn: () => datMonRows[0].length,
-    getDataRange: () => createRange(datMonRows, 1, 1, datMonRows.length, datMonRows[0].length),
-    getRange: (row, column, rowCount = 1, columnCount = 1) =>
-      createRange(datMonRows, row, column, rowCount, columnCount),
+  const datmonSheet = createSheetMock('DATMON', datMonRows);
+  const datbanSheet = createSheetMock('DATBAN', datBanRows);
+  const configSheet = createSheetMock('CONFIG_BAN', configBanRows);
+
+  const sheetMap = {
+    DATMON: datmonSheet,
+    DATBAN: datbanSheet,
+    CONFIG_BAN: configSheet,
   };
+
   const spreadsheet = {
-    getSheetByName: (name) => (name === 'DATMON' ? sheet : null),
-    getSheets: () => [sheet],
+    getSheetByName: (name) => sheetMap[name] ?? null,
+    getSheets: () => Object.values(sheetMap),
   };
   const cache = {
     get: (key) => cacheStore.get(key) ?? null,
@@ -55,6 +80,7 @@ function createContext() {
 
   const context = vm.createContext({
     console,
+    SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet },
     CacheService: { getScriptCache: () => cache },
     PropertiesService: { getScriptProperties: () => properties },
     Utilities: {
@@ -112,6 +138,16 @@ for (const codeFile of codeFiles) {
   const mutationResult = context.mutationJsonOutput(spreadsheet, { action: 'UPDATE_MENU', defer_views: true }, { status: 'success' });
   const parsedMutation = JSON.parse(mutationResult.text);
   assert.equal(parsedMutation.views_deferred, true, `${codeFile}: deferred VIEW response`);
+
+  // Kiểm thử action TEST_CONNECTION siêu tốc
+  const testConnOutput = context.doGet({ parameter: { action: 'TEST_CONNECTION', date: '09/09/2026' } });
+  const parsedTestConn = JSON.parse(testConnOutput.text);
+  assert.equal(parsedTestConn.status, 'success', `${codeFile}: test connection status`);
+  assert.equal(parsedTestConn.counts.totalBookings, 2, `${codeFile}: bookings count`);
+  assert.equal(parsedTestConn.counts.totalDatMon, 3, `${codeFile}: datMon count`);
+  assert.equal(parsedTestConn.statusMap['10'], 'inactive', `${codeFile}: locked table status`);
+  assert.equal(parsedTestConn.statusMap['1'], 'booked', `${codeFile}: booked table status`);
+  assert.equal(parsedTestConn.statusMap['B01'], 'booked', `${codeFile}: booked table formatted key`);
 }
 
 console.log(JSON.stringify({
@@ -125,5 +161,6 @@ console.log(JSON.stringify({
     'DATMON booking filter',
     'soft-delete compatibility',
     'deferred VIEW response',
+    'TEST_CONNECTION fast all-in-one check',
   ],
 }, null, 2));

@@ -25,21 +25,19 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onRefre
 
   const handleTestConnection = async () => {
     setIsTesting(true);
-    setTestLog('Đang kiểm tra kết nối đến API Gateway và 2 tab DATBAN, DATMON...');
+    setTestLog('⚡ Đang kiểm tra kết nối siêu tốc đến Google Apps Script Web App & các Sheet (CONFIG_BAN, DATBAN, DATMON)...');
     try {
       const start = Date.now();
-      const [statusMap, bookings, datMonItems] = await Promise.all([
-        gasApi.getTableStatusMap(undefined, true),
-        gasApi.getAllBookings(undefined, true),
-        gasApi.getAllDatMonMenus({ forceRefresh: true }),
-      ]);
+      const { statusMap, bookings, datMonItems, serverDuration } = await gasApi.testConnection();
       const elapsed = Date.now() - start;
       const countTables = Object.keys(statusMap).length;
       const countBookings = bookings.length;
       const countDatMon = datMonItems.length;
 
+      const durationInfo = serverDuration ? `${elapsed}ms (Xử lý Sheet: ${serverDuration}ms)` : `${elapsed}ms`;
+
       setTestLog(
-        `✅ KẾT NỐI THÀNH CÔNG (${elapsed}ms)!\n\n` +
+        `✅ KẾT NỐI THÀNH CÔNG (${durationInfo})!\n\n` +
         `📊 1. SƠ ĐỒ BÀN (CONFIG_BAN + DATBAN):\n` +
         `- Số bàn có trạng thái đặc biệt: ${countTables} bàn\n` +
         `- Chi tiết trạng thái: ${JSON.stringify(statusMap, null, 2)}\n\n` +
@@ -52,6 +50,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onRefre
           : `- Món đầu tiên: ${datMonItems[0].ten_mon} (SL: ${datMonItems[0].so_luong}) - Mã: ${datMonItems[0].id_mon}`)
       );
       onShowToast('Kết nối thành công', `Phản hồi: ${elapsed}ms | DATBAN: ${countBookings} đơn | DATMON: ${countDatMon} món`, 'success');
+      onRefreshAll();
     } catch (err: any) {
       setTestLog(`❌ Lỗi kết nối: ${err?.message || 'Không thể gọi API'}\n\nHãy đảm bảo bạn đã triển khai Web App với quyền "Anyone" (Bất kỳ ai).`);
       onShowToast('Lỗi kết nối', 'Vui lòng kiểm tra lại URL Web App', 'error');
@@ -301,7 +300,8 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ onShowToast, onRefre
               3. <strong>Bảo toàn 100% tính tương thích:</strong> Trả về đồng thời cả dạng phẳng <code className="text-cyan-300">Object.keys()</code> cho index.html cũ và cấu trúc <code className="text-cyan-300">statusMap / detailsMap / bookings</code> cho Web App mới.<br />
               4. <strong>15 Cột Sheet DATBAN:</strong> Khớp tuyệt đối thứ tự cột: id_dat, ngay_dat, gio_dat, ten_khach, sdt, so_khach, danh_sach_ban, yeu_cau_ban, dat_mon_truoc, dat_coc, Tien_coc, trang_thai, nguoi_nhap, thoi_gian_nhap, ghi_chu.<br />
               5. <strong>Tự động đồng bộ VIEW_HOMNAY & VIEW_BEP_HOMNAY:</strong> Tự động kiểm tra ngày trong tab DATBAN và DATMON có trùng ngày hôm nay để cập nhật tức thì khi có bàn hoặc món mới.<br />
-              6. <strong>Gỡ bỏ Menu Google Sheet:</strong> Bỏ menu tích hợp trên Google Sheet theo yêu cầu để giao diện bảng tính gọn gàng, tự động hóa ngầm không cần bấm menu thủ công.
+              6. <strong>Gỡ bỏ Menu Google Sheet:</strong> Bỏ menu tích hợp trên Google Sheet theo yêu cầu để giao diện bảng tính gọn gàng, tự động hóa ngầm không cần bấm menu thủ công.<br />
+              7. <strong>Tối ưu phản hồi siêu tốc:</strong> Hỗ trợ cơ chế Unified Health Check (<code className="text-cyan-300">action=TEST_CONNECTION</code>) gom đọc CONFIG_BAN, DATBAN, DATMON trong 1 request duy nhất, tối ưu cache in-memory, loại bỏ các tác vụ ghi sheet/bảo trì nặng khi đọc GET, giảm thời gian phản hồi từ ~9s xuống ~1s.
             </p>
           </div>
         )}

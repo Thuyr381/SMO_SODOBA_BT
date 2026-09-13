@@ -242,7 +242,7 @@ export const LinkTableModal: React.FC<LinkTableModalProps> = ({
 
               {viewMode === 'blueprint' ? (
                 <div className="p-1 sm:p-2 bg-slate-950/80 rounded-xl border border-slate-800 overflow-hidden flex flex-col items-center">
-                  <BlueprintScaler naturalWidth={436} naturalHeight={560}>
+                  <BlueprintScaler naturalWidth={444} naturalHeight={560}>
                     <FloorBlueprint
                       tables={tables}
                       statusMap={statusMap}

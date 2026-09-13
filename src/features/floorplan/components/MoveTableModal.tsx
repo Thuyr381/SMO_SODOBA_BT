@@ -286,7 +286,7 @@ export const MoveTableModal: React.FC<MoveTableModalProps> = ({
                   id="move-table-blueprint-picker"
                   className="p-1 sm:p-2 bg-slate-950/80 rounded-xl border border-slate-800 flex flex-col items-center [touch-action:pan-y] overflow-hidden"
                 >
-                  <BlueprintScaler naturalWidth={436} naturalHeight={560}>
+                  <BlueprintScaler naturalWidth={444} naturalHeight={560}>
                     <FloorBlueprint
                       tables={tables}
                       statusMap={statusMap}

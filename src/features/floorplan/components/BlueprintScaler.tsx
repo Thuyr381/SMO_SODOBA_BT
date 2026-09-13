@@ -4,7 +4,7 @@ import { Maximize2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 
 interface BlueprintScalerProps {
   children: React.ReactNode;
-  /** Natural unscaled width of the blueprint (default: 436px) */
+  /** Natural unscaled width of the blueprint (default: 444px) */
   naturalWidth?: number;
   /** Natural unscaled height of the blueprint (default: 560px) */
   naturalHeight?: number;
@@ -15,7 +15,7 @@ interface BlueprintScalerProps {
 
 export const BlueprintScaler: React.FC<BlueprintScalerProps> = ({
   children,
-  naturalWidth = 436,
+  naturalWidth = 444,
   naturalHeight = 560,
   showControls = true,
   className = '',

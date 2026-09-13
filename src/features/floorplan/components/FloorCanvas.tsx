@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { TableItem, TableStatusClass, ActionMode, BookingPayload } from '../../../types';
 import { FloorBlueprint } from './FloorBlueprint';
 import { SearchBar } from './SearchBar';
-import { normalizeTableId, normalizeDateString, parseTableList } from '../../../utils/tableHelper';
+import { normalizeTableId, normalizeDateString, parseTableList, mapTrangThaiToTableStatus } from '../../../utils/tableHelper';
 import { Maximize2, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 
 interface FloorCanvasProps {
@@ -35,11 +35,28 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = React.memo(({
   const [isFitMode, setIsFitMode] = useState(true);
   const [manualScale, setManualScale] = useState(1);
   const [fitScale, setFitScale] = useState(0.85);
+  const [naturalHeight, setNaturalHeight] = useState(620);
   const containerRef = useRef<HTMLDivElement>(null);
+  const blueprintMeasureRef = useRef<HTMLDivElement>(null);
 
   // Natural blueprint dimensions
-  const NATURAL_HEIGHT = 560;
-  const NATURAL_WIDTH = 450;
+  // Chiều cao chuẩn bao gồm cả VIP 70..76 và VIP 2 lầu 2B là ~610-630px
+  const NATURAL_WIDTH = 444;
+
+  // Đo đạc kích thước thực tế của Blueprint qua ResizeObserver
+  useEffect(() => {
+    if (!blueprintMeasureRef.current) return;
+    const observer = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const measured = Math.round(entry.contentRect.height) || blueprintMeasureRef.current?.offsetHeight;
+        if (measured && measured > 450 && Math.abs(measured - naturalHeight) > 4) {
+          setNaturalHeight(measured);
+        }
+      }
+    });
+    observer.observe(blueprintMeasureRef.current);
+    return () => observer.disconnect();
+  }, [naturalHeight]);
 
   // Calculate dynamic scale factor to fit floorplan into 1 single frame/viewport without scrolling
   useEffect(() => {
@@ -59,34 +76,38 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = React.memo(({
         (searchEl?.offsetHeight || 34) +
         (zoomEl?.offsetHeight || 26);
 
-      // Safe bottom space
-      const bottomSafe = 16;
+      // Safe bottom space (đảm bảo không bị che khuất thanh dưới)
+      const bottomSafe = 24;
 
       // Available width (with minimal margin)
-      const availW = Math.min(windowW - 12, NATURAL_WIDTH);
+      const availW = Math.max(windowW - 16, 280);
       // Available height strictly within current viewport
-      const availH = Math.max(windowH - topOccupied - bottomSafe, 220);
+      const availH = Math.max(windowH - topOccupied - bottomSafe, 240);
 
+      const naturalH = naturalHeight || 620;
       const scaleByW = availW / NATURAL_WIDTH;
-      const scaleByH = availH / NATURAL_HEIGHT;
+      const scaleByH = availH / naturalH;
+
+      // Trên PC và Tablet: cho phép phóng to hơn để nhìn rõ nét (lên tới 1.45x)
+      const maxFit = windowW >= 1024 ? 1.45 : (windowW >= 768 ? 1.3 : 1.15);
 
       // Fit mode ensures BOTH width and height fit on the screen without scrolling
       const calculated = Math.min(scaleByW, scaleByH);
-      const rounded = Math.max(0.45, Math.min(Number(calculated.toFixed(2)), 1.05));
+      const rounded = Math.max(0.45, Math.min(Number(calculated.toFixed(2)), maxFit));
       setFitScale(rounded);
     };
 
     calculateScale();
     window.addEventListener('resize', calculateScale);
     return () => window.removeEventListener('resize', calculateScale);
-  }, []);
+  }, [naturalHeight]);
 
   const currentScale = isFitMode ? fitScale : manualScale;
 
   // Zoom helpers
   const handleZoomIn = () => {
     setIsFitMode(false);
-    setManualScale((prev) => Math.min(Number((prev + 0.1).toFixed(2)), 1.4));
+    setManualScale((prev) => Math.min(Number((prev + 0.1).toFixed(2)), 1.6));
   };
 
   const handleZoomOut = () => {
@@ -103,7 +124,7 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = React.memo(({
     setIsFitMode((prev) => !prev);
   };
 
-  // Map of normalized table ID to customer name
+  // Map of normalized table ID to customer name across all aliases
   const customerMap = React.useMemo(() => {
     const map: Record<string, string> = {};
     const normSelectedDate = selectedDate ? normalizeDateString(selectedDate) : '';
@@ -121,17 +142,78 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = React.memo(({
       }
 
       const tableList = parseTableList(b.danh_sach_ban);
+      const customerName = (b.ten_khach || '').trim();
+      if (!customerName) return;
+
       tableList.forEach((rawTId) => {
         const normId = normalizeTableId(rawTId);
-        // Chỉ gán tên nếu bàn đó không ở trạng thái trống hoặc khóa
-        const currentStatus = statusMap[normId] || statusMap[rawTId];
-        if (currentStatus !== 'empty' && currentStatus !== 'inactive') {
-          map[normId] = b.ten_khach;
+        if (!normId) return;
+
+        // Gán tên khách hàng cho tất cả các định dạng alias của bàn
+        map[normId] = customerName;
+        map[rawTId] = customerName;
+
+        if (/^\d+$/.test(normId)) {
+          const num = parseInt(normId, 10);
+          map[String(num)] = customerName;
+          map[`B${String(num)}`] = customerName;
+          map[`B${('0' + num).slice(-2)}`] = customerName;
+          if ([70, 72, 74, 76].includes(num)) {
+            map[`VIP${num}`] = customerName;
+          }
+        } else if (normId.startsWith('VIP7')) {
+          const num = normId.replace('VIP', '');
+          map[num] = customerName;
+          map[`B${num}`] = customerName;
+          map[normId] = customerName;
+        } else if (normId === 'VIP1' || normId === '2A') {
+          map['VIP1'] = customerName;
+          map['2A'] = customerName;
+          map['LẦU 2A'] = customerName;
+        } else if (normId === 'VIP2' || normId === '2B') {
+          map['VIP2'] = customerName;
+          map['2B'] = customerName;
+          map['LẦU 2B'] = customerName;
         }
       });
     });
     return map;
-  }, [bookings, selectedDate, statusMap]);
+  }, [bookings, selectedDate]);
+
+  // Effective status map: Kết hợp statusMap hiện tại và các đơn đặt bàn tích cực cho ngày đã chọn
+  const effectiveStatusMap = React.useMemo(() => {
+    const nextMap = { ...statusMap };
+    const normSelectedDate = selectedDate ? normalizeDateString(selectedDate) : '';
+
+    bookings.forEach((b) => {
+      if (b.trang_thai === 'HỦY') return;
+
+      if (normSelectedDate && b.ngay_dat) {
+        const bookingDate = normalizeDateString(b.ngay_dat);
+        if (bookingDate && bookingDate !== normSelectedDate) {
+          return;
+        }
+      }
+
+      const tableList = parseTableList(b.danh_sach_ban);
+      const bStatus = mapTrangThaiToTableStatus(b.trang_thai);
+
+      tableList.forEach((rawTId) => {
+        const normId = normalizeTableId(rawTId);
+        if (!normId) return;
+
+        // Nếu statusMap chưa kịp có dữ liệu hoặc đang là empty, lấy ngay status từ đơn đặt
+        if (!nextMap[normId] || nextMap[normId] === 'empty') {
+          nextMap[normId] = bStatus;
+        }
+        if (!nextMap[rawTId] || nextMap[rawTId] === 'empty') {
+          nextMap[rawTId] = bStatus;
+        }
+      });
+    });
+
+    return nextMap;
+  }, [statusMap, bookings, selectedDate]);
 
   // Set of table IDs that match the search query (Tên khách, 3 số đuôi SĐT, số bàn)
   const matchingTableIds = React.useMemo(() => {
@@ -248,9 +330,9 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = React.memo(({
       <div
         ref={containerRef}
         id="blueprint-viewport-wrapper"
-        className="w-full flex justify-center items-start overflow-hidden select-none"
+        className="w-full flex justify-center items-start overflow-x-auto overflow-y-visible select-none px-1 py-1"
         style={{
-          height: isFitMode ? `${Math.round(NATURAL_HEIGHT * currentScale)}px` : 'auto',
+          minHeight: isFitMode ? `${Math.round(naturalHeight * currentScale) + 16}px` : 'auto',
           maxWidth: '100%',
         }}
       >
@@ -260,19 +342,21 @@ export const FloorCanvas: React.FC<FloorCanvasProps> = React.memo(({
             transform: `scale(${currentScale})`,
             transformOrigin: 'top center',
             width: `${NATURAL_WIDTH}px`,
-            marginBottom: isFitMode ? `-${Math.round(NATURAL_HEIGHT * (1 - currentScale))}px` : 0,
+            marginBottom: isFitMode ? `-${Math.max(0, Math.round(naturalHeight * (1 - currentScale)))}px` : 0,
           }}
           className="transition-transform duration-200 ease-out shrink-0"
         >
-          <FloorBlueprint
-            tables={tables}
-            statusMap={statusMap}
-            selectedTables={selectedTables}
-            onToggleTable={onToggleTable}
-            actionMode={actionMode}
-            customerMap={customerMap}
-            matchingTableIds={matchingTableIds}
-          />
+          <div ref={blueprintMeasureRef} className="w-full">
+            <FloorBlueprint
+              tables={tables}
+              statusMap={effectiveStatusMap}
+              selectedTables={selectedTables}
+              onToggleTable={onToggleTable}
+              actionMode={actionMode}
+              customerMap={customerMap}
+              matchingTableIds={matchingTableIds}
+            />
+          </div>
         </div>
       </div>
     </div>

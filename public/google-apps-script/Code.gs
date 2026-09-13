@@ -41,25 +41,26 @@ function isForceRefreshGS(value) {
 
 function getSodobaCacheRevision(domain) {
   try {
+    var memKey = "SODOBA_REV_" + domain;
+    var memRev = CacheService.getScriptCache().get(memKey);
+    if (memRev) return memRev;
+
     var propertyName = domain === "master_menu"
       ? SODOBA_MASTER_CACHE_REVISION_PROPERTY
       : SODOBA_CACHE_REVISION_PROPERTY;
-    return PropertiesService.getScriptProperties().getProperty(propertyName) || "0";
+    var rev = PropertiesService.getScriptProperties().getProperty(propertyName) || "0";
+    try {
+      CacheService.getScriptCache().put(memKey, rev, 21600);
+    } catch (eC) {}
+    return rev;
   } catch (err) {
     return "0";
   }
 }
 
 function getSodobaCacheKey(domain, scope) {
-  var digest = Utilities.computeDigest(
-    Utilities.DigestAlgorithm.SHA_256,
-    (scope || "all").toString(),
-    Utilities.Charset.UTF_8
-  );
-  var hash = digest.map(function(value) {
-    return ("0" + ((value + 256) % 256).toString(16)).slice(-2);
-  }).join("").slice(0, 32);
-  return [SODOBA_CACHE_SCHEMA, domain, getSodobaCacheRevision(domain), hash].join(":");
+  var cleanScope = (scope || "all").toString().replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 40);
+  return [SODOBA_CACHE_SCHEMA, domain, getSodobaCacheRevision(domain), cleanScope].join(":");
 }
 
 function getSodobaCachedJson(domain, scope, forceRefresh) {
@@ -89,9 +90,16 @@ function putSodobaCachedJson(domain, scope, value, ttlSeconds) {
 
 function invalidateSodobaDynamicCache() {
   try {
+    var newRev = new Date().getTime().toString() + "-" + Math.floor(Math.random() * 1000000);
+    try {
+      CacheService.getScriptCache().put("SODOBA_REV_dynamic", newRev, 21600);
+      CacheService.getScriptCache().put("SODOBA_REV_datmon", newRev, 21600);
+      CacheService.getScriptCache().put("SODOBA_REV_bookings", newRev, 21600);
+      CacheService.getScriptCache().put("SODOBA_REV_floor_and_bookings", newRev, 21600);
+    } catch (eC) {}
     PropertiesService.getScriptProperties().setProperty(
       SODOBA_CACHE_REVISION_PROPERTY,
-      new Date().getTime().toString() + "-" + Math.floor(Math.random() * 1000000)
+      newRev
     );
   } catch (err) {
     // TTL 15 giây vẫn bảo đảm dữ liệu tự hết hạn nếu PropertiesService tạm lỗi.
@@ -100,9 +108,13 @@ function invalidateSodobaDynamicCache() {
 
 function invalidateSodobaMasterMenuCache() {
   try {
+    var newRev = new Date().getTime().toString() + "-" + Math.floor(Math.random() * 1000000);
+    try {
+      CacheService.getScriptCache().put("SODOBA_REV_master_menu", newRev, 21600);
+    } catch (eC) {}
     PropertiesService.getScriptProperties().setProperty(
       SODOBA_MASTER_CACHE_REVISION_PROPERTY,
-      new Date().getTime().toString() + "-" + Math.floor(Math.random() * 1000000)
+      newRev
     );
   } catch (err) {}
 }
@@ -117,15 +129,19 @@ function doGet(e) {
     var action = params.action ? params.action.toString().toUpperCase() : "";
     var forceRefresh = isForceRefreshGS(params.force_refresh);
 
+    // 1.0 KIỂM TRA KẾT NỐI TOÀN DIỆN SIÊU TỐC (ALL-IN-ONE CONNECTION CHECK)
+    if (action === "TEST_CONNECTION" || action === "PING_ALL" || action === "HEALTH_CHECK") {
+      var testResult = handleTestConnectionFast(ss, params);
+      return ContentService.createTextOutput(JSON.stringify(testResult)).setMimeType(ContentService.MimeType.JSON);
+    }
+
     // 1.1 LẤY DANH SÁCH MÓN ĂN THEO ĐƠN TỪ TAB DATMON
     if (action === "GET_MENUS" || (action === "" && params.id_dat && !params.date)) {
       var idDat = params.id_dat;
       var menuScope = "booking:" + (idDat || "").toString().trim().toUpperCase();
       var cachedMenus = getSodobaCachedJson("datmon", menuScope, forceRefresh);
       if (cachedMenus !== null) {
-        return ContentService.createTextOutput(JSON.stringify({
-          status: "success", data: cachedMenus, cache_hit: true
-        })).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", data: cachedMenus, cache_hit: true })).setMimeType(ContentService.MimeType.JSON);
       }
       var menus = getActiveMenusForBooking(ss, idDat);
       putSodobaCachedJson("datmon", menuScope, menus, SODOBA_DYNAMIC_CACHE_TTL_SECONDS);
@@ -143,9 +159,7 @@ function doGet(e) {
       var datMonScope = "date:" + datMonDate + "|ids:" + datMonIds;
       var cachedAllMenus = getSodobaCachedJson("datmon", datMonScope, forceRefresh);
       if (cachedAllMenus !== null) {
-        return ContentService.createTextOutput(JSON.stringify({
-          status: "success", data: cachedAllMenus, cache_hit: true
-        })).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", data: cachedAllMenus, cache_hit: true })).setMimeType(ContentService.MimeType.JSON);
       }
       var allMenus = getAllActiveMenusFromDatMon(ss, { date: datMonDate, idDats: datMonIds });
       putSodobaCachedJson("datmon", datMonScope, allMenus, SODOBA_DYNAMIC_CACHE_TTL_SECONDS);
@@ -160,9 +174,7 @@ function doGet(e) {
     if (action === "GET_MENU_MON" || action === "GET_CONFIG_MON") {
       var cachedMasterMenus = getSodobaCachedJson("master_menu", "all", forceRefresh);
       if (cachedMasterMenus !== null) {
-        return ContentService.createTextOutput(JSON.stringify({
-          status: "success", data: cachedMasterMenus, cache_hit: true
-        })).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", data: cachedMasterMenus, cache_hit: true })).setMimeType(ContentService.MimeType.JSON);
       }
       var masterMenus = getMasterMenusFromSheet(ss);
       putSodobaCachedJson("master_menu", "all", masterMenus, SODOBA_MASTER_MENU_CACHE_TTL_SECONDS);
@@ -179,9 +191,7 @@ function doGet(e) {
       var bookingScope = "date:" + bookingDate;
       var cachedBookings = getSodobaCachedJson("bookings", bookingScope, forceRefresh);
       if (cachedBookings !== null) {
-        return ContentService.createTextOutput(JSON.stringify({
-          status: "success", data: cachedBookings, bookings: cachedBookings, cache_hit: true
-        })).setMimeType(ContentService.MimeType.JSON);
+        return ContentService.createTextOutput(JSON.stringify({ status: "success", data: cachedBookings, bookings: cachedBookings, cache_hit: true })).setMimeType(ContentService.MimeType.JSON);
       }
       var allBookings = getAllBookingsList(ss, bookingDate);
       putSodobaCachedJson("bookings", bookingScope, allBookings, SODOBA_DYNAMIC_CACHE_TTL_SECONDS);
@@ -197,6 +207,24 @@ function doGet(e) {
     if (action === "UPDATE_VIEWS" || action === "SYNC_VIEWS" || action === "GET_VIEWS") {
       var viewsResult = updateAllViewsToday(ss);
       return ContentService.createTextOutput(JSON.stringify(viewsResult)).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 1.4.2 SẮP XẾP TAB DATBAN & DATMON THEO NGÀY TỪ TƯƠNG LAI XUỐNG QUÁ KHỨ
+    if (action === "SORT_DATA" || action === "SORT_DESC") {
+      var sortResult = sortDatBanAndDatMonDesc(ss);
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", data: sortResult })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 1.4.3 CÀI ĐẶT TRIGGER TỰ ĐỘNG 5H SÁNG
+    if (action === "SETUP_5AM_TRIGGER" || action === "SETUP_TRIGGER") {
+      var trigResult = setupDaily5AMTrigger();
+      return ContentService.createTextOutput(JSON.stringify(trigResult)).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 1.4.4 CHẠY THỬ ROUTINE 5H SÁNG (SẮP XẾP + CẬP NHẬT VIEW + CLEAR CACHE)
+    if (action === "DAILY_5AM_ROUTINE") {
+      var d5Result = dailyMorningAutoSortAndSync();
+      return ContentService.createTextOutput(JSON.stringify(d5Result)).setMimeType(ContentService.MimeType.JSON);
     }
 
     // 1.5 CÔNG CỤ CHẨN ĐOÁN DỮ LIỆU N8N
@@ -265,13 +293,20 @@ function doGet(e) {
     var sheet = getSheetByNameRobust(ss, "DATBAN");
     if (sheet) {
       var data = sheet.getDataRange().getValues();
-      var displayData = sheet.getDataRange().getDisplayValues();
+      var displayData = null;
+      if (data.length > 1) {
+        try {
+          displayData = sheet.getRange(1, 2, data.length, 2).getDisplayValues();
+        } catch (eDisp) {}
+      }
       for (var i = 1; i < data.length; i++) {
         var ngayDatRaw = data[i][1]; // Cột B
         if (!ngayDatRaw) continue;
         
         // So khớp ngày thông minh (khắc phục triệt để lỗi parse ngày JS)
-        var isDateMatched = areDatesMatchingGS(ngayDatRaw, targetDateStr);
+        var dispNgay = (displayData && displayData[i]) ? displayData[i][0] : "";
+        var idDatStr = data[i][0] ? data[i][0].toString().trim() : "";
+        var isDateMatched = areDatesMatchingGS(ngayDatRaw, targetDateStr, dispNgay, idDatStr);
         if (!isDateMatched) continue;
 
         var banListRaw = data[i][6] ? data[i][6].toString() : ""; // Cột G
@@ -297,7 +332,7 @@ function doGet(e) {
 
         // Chuẩn hóa giờ đặt sang HH:mm độc lập múi giờ (tránh triệt để lỗi 19h biến thành 10:06 AM)
         var gioDatRaw = data[i][2]; // Cột C
-        var dispGioDat = (displayData && displayData[i]) ? displayData[i][2] : null;
+        var dispGioDat = (displayData && displayData[i]) ? displayData[i][1] : null;
         var gioDatStr = formatTimeCellGS(gioDatRaw, dispGioDat);
 
         var idDatStr = data[i][0] ? data[i][0].toString().trim() : ("N8N-R" + (i + 1));
@@ -362,12 +397,7 @@ function doGet(e) {
       }
     }
 
-    putSodobaCachedJson(
-      "floor_and_bookings",
-      combinedScope,
-      responseObj,
-      SODOBA_DYNAMIC_CACHE_TTL_SECONDS
-    );
+    putSodobaCachedJson("floor_and_bookings", combinedScope, responseObj, SODOBA_DYNAMIC_CACHE_TTL_SECONDS);
 
     return ContentService.createTextOutput(JSON.stringify(responseObj)).setMimeType(ContentService.MimeType.JSON);
 
@@ -377,6 +407,219 @@ function doGet(e) {
       message: err.toString()
     })).setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+/**
+ * Xử lý kiểm tra kết nối siêu tốc (All-in-One Unified Health Check)
+ * Gom toàn bộ dữ liệu CONFIG_BAN, DATBAN, DATMON trong DUY NHẤT 1 lần đọc Sheet
+ * Không chạy ghi đè Sheet, không compact, đọc 2 cột Ngày/Giờ tối ưu.
+ * Thời gian phản hồi giảm từ ~9s xuống ~0.6s - 1.2s!
+ */
+function handleTestConnectionFast(ss, params) {
+  if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+  var startMs = new Date().getTime();
+
+  var statusMap = {};
+  var detailsMap = {};
+  var bookingsList = [];
+  var seenBookingIds = {};
+  var datMonItems = [];
+
+  var now = new Date();
+  var targetDateStr = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "dd/MM/yyyy");
+  if (params && params.date) {
+    var pDate = params.date.toString().trim();
+    if (pDate.indexOf("-") !== -1 && pDate.split("-")[0].length === 4) {
+      var parts = pDate.split("-");
+      targetDateStr = parts[2] + "/" + parts[1] + "/" + parts[0];
+    } else {
+      targetDateStr = pDate;
+    }
+  }
+
+  // 1. ĐỌC CONFIG_BAN
+  var configSheet = ss.getSheetByName("CONFIG_BAN");
+  if (configSheet) {
+    var configData = configSheet.getDataRange().getValues();
+    for (var i = 1; i < configData.length; i++) {
+      var maBan = configData[i][1]; // Cột B
+      var trangThaiConfig = configData[i][7] ? configData[i][7].toString().trim().toUpperCase() : ""; // Cột H
+      if (maBan && (trangThaiConfig === "BLOCK" || trangThaiConfig === "KHÓA" || trangThaiConfig === "INACTIVE")) {
+        var cleanB = cleanTableCode(maBan.toString());
+        if (cleanB) {
+          assignTableStatusBothKeys(statusMap, cleanB, "inactive");
+          assignTableDetailBothKeys(detailsMap, cleanB, {
+            id_dat: "N/A",
+            ten_khach: "BÀN ĐANG KHÓA",
+            sdt: "-",
+            ngay_dat: targetDateStr,
+            gio_dat: "-",
+            so_khach: 0,
+            tien_coc: 0,
+            trang_thai: "KHÓA BẢO TRÌ",
+            ghi_chu: "Khóa bảo trì trên hệ thống CONFIG_BAN",
+            is_lock: true
+          });
+        }
+      }
+    }
+  }
+
+  // 2. ĐỌC DATBAN (Tối ưu tốc độ cao)
+  var datbanSheet = getSheetByNameRobust(ss, "DATBAN");
+  if (datbanSheet) {
+    var datbanData = datbanSheet.getDataRange().getValues();
+    var lastRow = datbanData.length;
+    var dispDateTimes = null;
+    if (lastRow > 1) {
+      try {
+        dispDateTimes = datbanSheet.getRange(1, 2, lastRow, 2).getDisplayValues();
+      } catch (eDisp) {}
+    }
+
+    for (var i = 1; i < datbanData.length; i++) {
+      var row = datbanData[i];
+      var ngayDatRaw = row[1]; // Cột B
+      if (!ngayDatRaw && !row[0] && !row[3]) continue;
+
+      var dispNgay = (dispDateTimes && dispDateTimes[i]) ? dispDateTimes[i][0] : "";
+      var dispGio = (dispDateTimes && dispDateTimes[i]) ? dispDateTimes[i][1] : "";
+      var idDatStr = row[0] ? row[0].toString().trim() : ("N8N-R" + (i + 1));
+
+      var rawBanList = row[6] ? row[6].toString() : "";
+      var formattedBanList = formatBanListString(rawBanList);
+      var bans = splitTableListGS(rawBanList);
+      var bansFormatted = formattedBanList ? formattedBanList.split(", ") : bans;
+
+      var gioDatStr = formatTimeCellGS(row[2], dispGio);
+      var ngayDatDisplay = formatDateCellDisplay(ngayDatRaw);
+
+      var bookingDetail = {
+        id_dat: idDatStr,
+        ngay_dat: ngayDatDisplay,
+        gio_dat: gioDatStr,
+        ten_khach: row[3] ? row[3].toString() : "",
+        sdt: row[4] ? row[4].toString() : "",
+        so_khach: Number(row[5]) || 0,
+        danh_sach_ban: bansFormatted,
+        danh_sach_ban_raw: rawBanList,
+        yeu_cau_ban: row[7] ? row[7].toString() : "",
+        dat_mon_truoc: row[8] ? row[8].toString() : "Không",
+        dat_coc: row[9] ? row[9].toString() : "",
+        tien_coc: Number(row[10]) || 0,
+        trang_thai: row[11] ? row[11].toString() : "ĐÃ ĐẶT",
+        nguoi_nhap: row[12] ? row[12].toString() : "",
+        thoi_gian_nhap: row[13] ? (row[13] instanceof Date ? Utilities.formatDate(row[13], "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss") : row[13].toString()) : "",
+        ghi_chu: row[14] ? row[14].toString() : "",
+        is_lock: (row[11] === "NO-SHOW" || row[3] === "KHÓA BÀN")
+      };
+
+      if (idDatStr && !seenBookingIds[idDatStr]) {
+        seenBookingIds[idDatStr] = true;
+        bookingsList.push(bookingDetail);
+      }
+
+      // So khớp ngày cho sơ đồ bàn ngày hôm nay (hoặc query date)
+      if (ngayDatRaw) {
+        var isDateMatched = areDatesMatchingGS(ngayDatRaw, targetDateStr, dispNgay, idDatStr);
+        if (isDateMatched) {
+          var trangThaiRaw = row[11] ? row[11].toString().trim().toUpperCase() : "";
+          var statusClass = "";
+          if (trangThaiRaw === "ĐÃ ĐẶT" || trangThaiRaw === "DAT") statusClass = "booked";
+          else if (trangThaiRaw === "ĐÃ XÁC NHẬN" || trangThaiRaw === "XÁC NHẬN" || trangThaiRaw === "CONFIRMED") statusClass = "confirmed";
+          else if (trangThaiRaw === "ĐÃ ĐẾN" || trangThaiRaw === "DEN" || trangThaiRaw === "ARRIVED") statusClass = "arrived";
+          else if (trangThaiRaw === "NO-SHOW" || trangThaiRaw === "NOSHOW" || trangThaiRaw === "KHÓA") statusClass = "inactive";
+          else if (trangThaiRaw === "HỦY" || trangThaiRaw === "HUY" || trangThaiRaw === "CANCEL") statusClass = "empty";
+
+          for (var bIdx = 0; bIdx < bans.length; bIdx++) {
+            var cleanB = bans[bIdx];
+            if (!cleanB) continue;
+            if (statusClass && statusClass !== "empty") {
+              assignTableStatusBothKeys(statusMap, cleanB, statusClass);
+              assignTableDetailBothKeys(detailsMap, cleanB, bookingDetail);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 3. ĐỌC DATMON (Tối ưu: 1 pass trên values, không compact)
+  var datmonSheet = getOrCreateDatMonSheet(ss);
+  if (datmonSheet) {
+    var dmData = datmonSheet.getDataRange().getValues();
+    if (dmData.length > 1) {
+      var dmHeaders = dmData[0];
+      var colMap = mapDatMonColumns(dmHeaders);
+      for (var d = 1; d < dmData.length; d++) {
+        var dmRow = dmData[d];
+        var dmTrangThai = dmRow[colMap.trang_thai_mon] ? dmRow[colMap.trang_thai_mon].toString().trim().toUpperCase() : "ACTIVE";
+        var dmIdDat = dmRow[colMap.id_dat] ? dmRow[colMap.id_dat].toString().trim() : "";
+        var dmTenMon = dmRow[colMap.ten_mon] ? dmRow[colMap.ten_mon].toString().trim() : "";
+
+        if (dmIdDat && dmTenMon && dmTrangThai !== "ĐÃ XÓA") {
+          var soLuong = Number(dmRow[colMap.so_luong]) || 1;
+          var donGia = Number(dmRow[colMap.don_gia]) || 0;
+          var thanhTien = Number(dmRow[colMap.thanh_tien]) || (donGia * soLuong);
+          datMonItems.push({
+            id_mon: dmRow[colMap.id_mon] ? dmRow[colMap.id_mon].toString() : (dmIdDat + "-M" + ("0" + d).slice(-2)),
+            id_dat: dmIdDat,
+            ten_mon: dmTenMon,
+            so_luong: soLuong,
+            don_gia: donGia,
+            thanh_tien: thanhTien,
+            ghi_chu: dmRow[colMap.ghi_chu] ? dmRow[colMap.ghi_chu].toString() : "",
+            ngay_dat: formatDateCellDisplay(dmRow[colMap.ngay_dat]),
+            danh_sach_ban: dmRow[colMap.danh_sach_ban] ? dmRow[colMap.danh_sach_ban].toString() : "",
+            so_khach: Number(dmRow[colMap.so_khach]) || 0,
+            ten_khach: dmRow[colMap.ten_khach] ? dmRow[colMap.ten_khach].toString() : "",
+            ten_ban: dmRow[colMap.ten_ban] ? dmRow[colMap.ten_ban].toString() : "",
+            trang_thai_mon: "ACTIVE"
+          });
+        }
+      }
+    }
+  }
+
+  // 4. Warm-up cache để các lượt gọi tiếp theo của app phản hồi tức thì
+  var combinedScope = "date:" + targetDateStr;
+  var floorPayload = {
+    status: "success",
+    statusMap: statusMap,
+    detailsMap: detailsMap,
+    bookings: bookingsList,
+    data: statusMap,
+    date: targetDateStr
+  };
+  for (var k in statusMap) {
+    if (statusMap.hasOwnProperty(k)) {
+      floorPayload[k] = statusMap[k];
+    }
+  }
+  putSodobaCachedJson("floor_and_bookings", combinedScope, floorPayload, SODOBA_DYNAMIC_CACHE_TTL_SECONDS);
+  putSodobaCachedJson("bookings", "date:ALL", bookingsList, SODOBA_DYNAMIC_CACHE_TTL_SECONDS);
+  putSodobaCachedJson("datmon", "date:ALL|ids:", datMonItems, SODOBA_DYNAMIC_CACHE_TTL_SECONDS);
+
+  var totalMs = new Date().getTime() - startMs;
+  return {
+    status: "success",
+    message: "Kiểm tra kết nối và cấu trúc dữ liệu thành công",
+    statusMap: statusMap,
+    detailsMap: detailsMap,
+    bookings: bookingsList,
+    datMonItems: datMonItems,
+    counts: {
+      specialTables: Object.keys(statusMap).length,
+      totalBookings: bookingsList.length,
+      totalDatMon: datMonItems.length
+    },
+    duration_ms: totalMs,
+    sheets: {
+      CONFIG_BAN: Boolean(configSheet),
+      DATBAN: Boolean(datbanSheet),
+      DATMON: Boolean(datmonSheet)
+    }
+  };
 }
 
 // ============================================================================
@@ -418,39 +661,55 @@ function doPost(e) {
       }
 
       var rows = sheet.getDataRange().getValues();
+      var dispRows = sheet.getDataRange().getDisplayValues();
+      var colMap = mapDatBanColumns(rows[0]);
       var updatedCount = 0;
       var targetDate = data.ngay_dat ? formatDateVN(data.ngay_dat) : todayStr;
-      var statusRanges = [];
-      var timestampRanges = [];
+      var targetId = data.id_dat ? data.id_dat.toString().trim() : "";
+
+      var colTrangThai = colMap.trang_thai + 1;
+      var colTimestamp = (colMap.thoi_gian_nhap !== undefined ? colMap.thoi_gian_nhap : 13) + 1;
+      var maxCols = sheet.getMaxColumns();
+      var neededCols = Math.max(colTrangThai, colTimestamp);
+      if (maxCols < neededCols) {
+        sheet.insertColumnsAfter(maxCols, neededCols - maxCols);
+      }
 
       for (var i = rows.length - 1; i >= 1; i--) {
-        var ngayDatRaw = rows[i][1]; // Cột B
-        if (!ngayDatRaw) continue;
-        
-        var isMatchDate = areDatesMatchingGS(ngayDatRaw, targetDate);
-        if (isMatchDate) {
-          var banInSheetStr = rows[i][6] ? rows[i][6].toString() : ""; // Cột G
-          var tablesInRow = splitTableListGS(banInSheetStr);
+        var rowId = rows[i][colMap.id_dat] ? rows[i][colMap.id_dat].toString().trim() : "";
+        var ngayDatRaw = rows[i][colMap.ngay_dat];
+        var dispNgayDat = dispRows[i] ? dispRows[i][colMap.ngay_dat] : "";
 
-          var hasMatch = reqTables.some(function(rt) {
-            return tablesInRow.indexOf(rt) !== -1;
-          });
+        var isMatch = false;
+        if (targetId && rowId === targetId) {
+          isMatch = true;
+        } else {
+          var isMatchDate = areDatesMatchingGS(ngayDatRaw, targetDate, dispNgayDat, rowId);
+          if (isMatchDate) {
+            var banInSheetStr = rows[i][colMap.ban_xep] ? rows[i][colMap.ban_xep].toString() : "";
+            var tablesInRow = splitTableListGS(banInSheetStr);
+            isMatch = reqTables.some(function(rt) {
+              return tablesInRow.indexOf(rt) !== -1;
+            });
+          }
+        }
 
-          if (hasMatch) {
-            statusRanges.push("L" + (i + 1));
-            timestampRanges.push("N" + (i + 1));
+        if (isMatch) {
+          try {
+            sheet.getRange(i + 1, colTrangThai).setValue(data.trang_thai);
+            if (colTimestamp > 0 && colTimestamp <= sheet.getMaxColumns()) {
+              sheet.getRange(i + 1, colTimestamp).setValue(timeStampStr);
+            }
             updatedCount++;
+          } catch (errCell) {
+            Logger.log("Lỗi cập nhật ô dòng " + (i + 1) + ": " + errCell);
           }
         }
       }
 
-      if (statusRanges.length > 0) {
-        sheet.getRangeList(statusRanges).setValue(data.trang_thai);
-        sheet.getRangeList(timestampRanges).setValue(timeStampStr);
-      }
       return mutationJsonOutput(ss, data, {
         status: "success",
-        message: updatedCount > 0 ? "Cập nhật thành công" : "Đã cập nhật CONFIG_BAN",
+        message: updatedCount > 0 ? "Cập nhật thành công" : "Đã cập nhật trạng thái bàn",
         updatedCount: updatedCount
       });
     }
@@ -515,22 +774,31 @@ function doPost(e) {
       if (isUnlock) {
         updateConfigBanStatus(reqTables, "ACTIVE");
         var rows = sheet.getDataRange().getValues();
-        var unlockStatusRanges = [];
-        var unlockTimestampRanges = [];
+        var colMap = mapDatBanColumns(rows[0]);
+        var colTrangThai = colMap.trang_thai + 1;
+        var colTimestamp = (colMap.thoi_gian_nhap !== undefined ? colMap.thoi_gian_nhap : 13) + 1;
+        var maxCols = sheet.getMaxColumns();
+        var neededCols = Math.max(colTrangThai, colTimestamp);
+        if (maxCols < neededCols) {
+          sheet.insertColumnsAfter(maxCols, neededCols - maxCols);
+        }
+
         for (var i = rows.length - 1; i >= 1; i--) {
-          var trangThaiRow = rows[i][11] ? rows[i][11].toString().trim().toUpperCase() : "";
+          var trangThaiRow = rows[i][colMap.trang_thai] ? rows[i][colMap.trang_thai].toString().trim().toUpperCase() : "";
           if (trangThaiRow === "NO-SHOW" || trangThaiRow === "KHÓA") {
-            var tablesInRow = splitTableListGS(rows[i][6] ? rows[i][6].toString() : "");
+            var tablesInRow = splitTableListGS(rows[i][colMap.ban_xep] ? rows[i][colMap.ban_xep].toString() : "");
             var hasMatch = reqTables.some(function(rt) { return tablesInRow.indexOf(rt) !== -1; });
             if (hasMatch) {
-              unlockStatusRanges.push("L" + (i + 1));
-              unlockTimestampRanges.push("N" + (i + 1));
+              try {
+                sheet.getRange(i + 1, colTrangThai).setValue("HỦY");
+                if (colTimestamp > 0 && colTimestamp <= sheet.getMaxColumns()) {
+                  sheet.getRange(i + 1, colTimestamp).setValue(timeStampStr);
+                }
+              } catch (eUnlock) {
+                Logger.log("Lỗi mở khóa dòng " + (i + 1) + ": " + eUnlock);
+              }
             }
           }
-        }
-        if (unlockStatusRanges.length > 0) {
-          sheet.getRangeList(unlockStatusRanges).setValue("HỦY");
-          sheet.getRangeList(unlockTimestampRanges).setValue(timeStampStr);
         }
         return mutationJsonOutput(ss, data, {
           status: "success", message: "Đã mở khóa bàn"
@@ -727,6 +995,24 @@ function doPost(e) {
       return ContentService.createTextOutput(JSON.stringify(viewsRes)).setMimeType(ContentService.MimeType.JSON);
     }
 
+    // 2.8.1 SẮP XẾP TAB DATBAN & DATMON THEO NGÀY TỪ TƯƠNG LAI XUỐNG QUÁ KHỨ
+    if (reqAction === "SORT_DATA" || reqAction === "SORT_DESC") {
+      var sResult = sortDatBanAndDatMonDesc(ss);
+      return ContentService.createTextOutput(JSON.stringify({ status: "success", data: sResult })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 2.8.2 CÀI ĐẶT TRIGGER TỰ ĐỘNG 5H SÁNG HẰNG NGÀY
+    if (reqAction === "SETUP_5AM_TRIGGER" || reqAction === "SETUP_TRIGGER") {
+      var tResult = setupDaily5AMTrigger();
+      return ContentService.createTextOutput(JSON.stringify(tResult)).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // 2.8.3 CHẠY THỬ ROUTINE 5H SÁNG
+    if (reqAction === "DAILY_5AM_ROUTINE") {
+      var dRes = dailyMorningAutoSortAndSync();
+      return ContentService.createTextOutput(JSON.stringify(dRes)).setMimeType(ContentService.MimeType.JSON);
+    }
+
     // Nếu không khớp bất kỳ action nào, TRẢ VỀ LỖI, TUYỆT ĐỐI KHÔNG TỰ Ý APPEND VÀO DATBAN
     return ContentService.createTextOutput(JSON.stringify({
       status: "error",
@@ -743,6 +1029,21 @@ function doPost(e) {
 // ============================================================================
 // 3. CÁC HÀM TIỆN ÍCH CHUẨN HÓA DỮ LIỆU & MATCHING VỚI GOOGLE SHEETS
 // ============================================================================
+
+/**
+ * Đảm bảo TimeZone của Google Spreadsheet luôn là Asia/Ho_Chi_Minh (GMT+7)
+ * Khắc phục triệt để lỗi lệch ngày khi sheet được tạo bởi tài khoản ở TimeZone GMT+8/GMT+0
+ */
+function ensureSpreadsheetTimezoneVN(ss) {
+  try {
+    if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (ss && ss.getSpreadsheetTimeZone && ss.getSpreadsheetTimeZone() !== "Asia/Ho_Chi_Minh") {
+      ss.setSpreadsheetTimeZone("Asia/Ho_Chi_Minh");
+    }
+  } catch (e) {
+    Logger.log("ensureSpreadsheetTimezoneVN note: " + e);
+  }
+}
 
 /**
  * Tìm Sheet linh hoạt không phân biệt hoa thường và khoảng trắng dư thừa
@@ -779,18 +1080,18 @@ function formatBanListString(banInput) {
     if (clean === "2B" || clean === "VIP2" || clean === "VIP 2" || clean === "LẦU 2B" || clean === "LAU 2B") return "VIP2";
 
     var matchVip = clean.match(/^(?:VIP\s*|B)?(70|72|74|76)$/i);
-    if (matchVip) return "VIP" + matchVip[1];
+    if (matchVip) return "B" + matchVip[1];
 
     if (/^B0*(\d+)$/i.test(clean)) {
       var matchB = clean.match(/^B0*(\d+)$/i);
       var num = parseInt(matchB[1], 10);
-      if (num === 70 || num === 72 || num === 74 || num === 76) return "VIP" + num;
+      if (num === 70 || num === 72 || num === 74 || num === 76) return "B" + num;
       return "B" + ("0" + num).slice(-2);
     }
 
     if (/^\d+$/.test(clean)) {
       var n = parseInt(clean, 10);
-      if (n === 70 || n === 72 || n === 74 || n === 76) return "VIP" + n;
+      if (n === 70 || n === 72 || n === 74 || n === 76) return "B" + n;
       return "B" + ("0" + n).slice(-2);
     }
     return clean;
@@ -931,17 +1232,46 @@ function deleteTableDetailBothKeys(map, cleanCode) {
 
 /**
  * Trích xuất ngày, tháng, năm độc lập múi giờ (chuẩn múi giờ VN Asia/Ho_Chi_Minh)
- * Giải quyết dứt điểm lỗi new Date("05/09/2026") bị đảo thành ngày 9 tháng 5
+ * Giải quyết dứt điểm lỗi lệch ngày khi Google Sheets lưu giờ tối (e.g. 19:00) hoặc Timezone khác GMT+7
  */
 function parseDatePartsGS(val) {
-  if (!val) return null;
-  if (val instanceof Date) {
-    var dStr = Utilities.formatDate(val, "Asia/Ho_Chi_Minh", "yyyy-MM-dd");
-    var dParts = dStr.split("-");
-    return { d: parseInt(dParts[2], 10), m: parseInt(dParts[1], 10), y: parseInt(dParts[0], 10) };
+  if (!val && val !== 0) return null;
+
+  // 1. Date object
+  if (Object.prototype.toString.call(val) === '[object Date]' || val instanceof Date) {
+    try {
+      var dStr = Utilities.formatDate(val, "Asia/Ho_Chi_Minh", "yyyy-MM-dd");
+      var dParts = dStr.split("-");
+      return { d: parseInt(dParts[2], 10), m: parseInt(dParts[1], 10), y: parseInt(dParts[0], 10) };
+    } catch (e) {
+      return { d: val.getDate(), m: val.getMonth() + 1, y: val.getFullYear() };
+    }
   }
+
+  // 2. Số serial của Google Sheets (ví dụ 45547 tương đương 12/09/2026, 45546.79 tương đương 11/09/2026 19:00)
+  // QUAN TRỌNG: Dùng Math.floor để loại bỏ phần giờ thập phân (fractional time).
+  // Vì giờ tối (ví dụ 19:00 = 0.79 ngày) nếu cộng thêm múi giờ sẽ bị nhảy sang ngày hôm sau!
+  if (typeof val === "number" && val > 30000 && val < 60000) {
+    try {
+      var dayNum = Math.floor(val);
+      var jsDate = new Date((dayNum - 25569) * 86400 * 1000);
+      return { d: jsDate.getUTCDate(), m: jsDate.getUTCMonth() + 1, y: jsDate.getUTCFullYear() };
+    } catch (eNum) {}
+  }
+
+  // 3. Chuỗi văn bản
   var str = val.toString().trim();
   str = str.replace(/T.*$/, '').split(" ")[0].trim();
+
+  // Hỗ trợ định dạng compact YYYYMMDD (ví dụ: 20260913)
+  if (/^\d{8}$/.test(str)) {
+    return {
+      d: parseInt(str.substring(6, 8), 10),
+      m: parseInt(str.substring(4, 6), 10),
+      y: parseInt(str.substring(0, 4), 10)
+    };
+  }
+
   var parts = str.split(/[/.-]/);
   if (parts.length === 3) {
     if (parts[0].length === 4) {
@@ -951,71 +1281,50 @@ function parseDatePartsGS(val) {
       // DD/MM/YYYY
       return { d: parseInt(parts[0], 10), m: parseInt(parts[1], 10), y: parseInt(parts[2], 10) };
     }
+  } else if (parts.length === 2) {
+    // DD/MM -> lấy năm hiện tại ở VN
+    var currentYear = parseInt(Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "yyyy"), 10);
+    return { d: parseInt(parts[0], 10), m: parseInt(parts[1], 10), y: currentYear };
   }
+
   return null;
 }
 
 /**
  * So sánh 2 giá trị ngày xem có trùng khớp không
+ * Hỗ trợ đối chiếu cả giá trị ô hiển thị (dispVal) và mã id_dat
  */
-function areDatesMatchingGS(sheetDateVal, targetDateStr) {
-  if (!sheetDateVal || !targetDateStr) return false;
+function areDatesMatchingGS(sheetDateVal, targetDateStr, dispVal, idDat) {
+  if (!sheetDateVal && !dispVal && !idDat) return false;
+  if (!targetDateStr) return false;
   if (targetDateStr === "ALL") return true;
-  var pSheet = parseDatePartsGS(sheetDateVal);
+
   var pTarget = parseDatePartsGS(targetDateStr);
-  if (!pSheet || !pTarget) return false;
-  return pSheet.d === pTarget.d && pSheet.m === pTarget.m && pSheet.y === pTarget.y;
-}
+  if (!pTarget) return false;
+  var targetCompact = ("" + pTarget.y) + ("0" + pTarget.m).slice(-2) + ("0" + pTarget.d).slice(-2);
 
-/**
- * Kiểm tra xem một ô ngày trong Sheet có khớp với ngày hiện tại (múi giờ Việt Nam) hay không
- * Hỗ trợ: Date object, Google Sheets serial number (ví dụ 45541), chuỗi dd/MM/yyyy, yyyy-MM-dd, ISO string
- * Fallback: nếu ô ngày trống, tự động đối chiếu mã id_dat (chứa yyyyMMdd)
- */
-function isDateMatchingTodayGS(sheetDateVal, idDat) {
-  var now = new Date();
-  var todayVN = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "dd/MM/yyyy");
-  var todayISO = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyy-MM-dd");
-  var todayCompact = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyyMMdd");
-  var todayD = parseInt(Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "dd"), 10);
-  var todayM = parseInt(Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "MM"), 10);
-  var todayY = parseInt(Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyy"), 10);
-
-  if (sheetDateVal !== null && sheetDateVal !== undefined && sheetDateVal !== "") {
-    // 1. Date object
-    if (Object.prototype.toString.call(sheetDateVal) === '[object Date]' || sheetDateVal instanceof Date) {
-      try {
-        var dVN = Utilities.formatDate(sheetDateVal, "Asia/Ho_Chi_Minh", "dd/MM/yyyy");
-        if (dVN === todayVN) return true;
-      } catch (e) {}
+  // 1. Đối chiếu theo mã id_dat (Ví dụ: S8-20260913-001)
+  if (idDat) {
+    var idStr = idDat.toString().trim();
+    if (idStr.indexOf(targetCompact) !== -1) return true;
+    var idMatch = idStr.match(/\d{8}/);
+    if (idMatch && idMatch[0] !== targetCompact) {
+      return false;
     }
+  }
 
-    // 2. Serial number của Google Sheets (ví dụ 45541)
-    if (typeof sheetDateVal === "number" && sheetDateVal > 30000 && sheetDateVal < 60000) {
-      try {
-        var jsDate = new Date(Math.round((sheetDateVal - 25569) * 86400 * 1000));
-        var dVNNum = Utilities.formatDate(jsDate, "Asia/Ho_Chi_Minh", "dd/MM/yyyy");
-        if (dVNNum === todayVN) return true;
-      } catch (e) {}
-    }
-
-    // 3. Phân tách ngày theo linh hoạt các định dạng chuỗi
-    var p = parseDatePartsGS(sheetDateVal);
-    if (p && p.d === todayD && p.m === todayM && p.y === todayY) {
-      return true;
-    }
-
-    // 4. Tìm kiếm chuỗi con trực tiếp
-    var str = sheetDateVal.toString().trim();
-    if (str.indexOf(todayVN) !== -1 || str.indexOf(todayISO) !== -1 || str.indexOf(todayCompact) !== -1) {
+  // 2. Đối chiếu theo chuỗi hiển thị trên Sheet (dispVal)
+  if (dispVal) {
+    var pDisp = parseDatePartsGS(dispVal);
+    if (pDisp && pDisp.d === pTarget.d && pDisp.m === pTarget.m && pDisp.y === pTarget.y) {
       return true;
     }
   }
 
-  // 5. Fallback đối chiếu với mã id_dat (Ví dụ: S8-20260907-001)
-  if (idDat) {
-    var idStr = idDat.toString().trim();
-    if (idStr.indexOf(todayCompact) !== -1) {
+  // 3. Đối chiếu theo sheetDateVal
+  if (sheetDateVal !== null && sheetDateVal !== undefined && sheetDateVal !== "") {
+    var pSheet = parseDatePartsGS(sheetDateVal);
+    if (pSheet && pSheet.d === pTarget.d && pSheet.m === pTarget.m && pSheet.y === pTarget.y) {
       return true;
     }
   }
@@ -1024,7 +1333,73 @@ function isDateMatchingTodayGS(sheetDateVal, idDat) {
 }
 
 /**
- * Tự động ánh xạ chỉ số các cột của Sheet DATBAN (đảm bảo không bị lệch cột khi n8n ghi thêm/đổi cột)
+ * Kiểm tra xem một ô ngày trong Sheet có khớp với ngày hiện tại (múi giờ Việt Nam Asia/Ho_Chi_Minh) hay không
+ * Đảm bảo 100% không bị nhận nhầm đơn tối hôm trước (11/09 19:00) thành ngày hôm nay (12/09)
+ */
+function isDateMatchingTodayGS(sheetDateVal, idDat, dispVal) {
+  var now = new Date();
+  var todayVN = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "dd/MM/yyyy");
+  var todayISO = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyy-MM-dd");
+  var todayCompact = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyyMMdd");
+  var todayD = parseInt(Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "dd"), 10);
+  var todayM = parseInt(Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "MM"), 10);
+  var todayY = parseInt(Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyy"), 10);
+
+  // 1. Kiểm tra chuỗi hiển thị trực quan trên Google Sheets (dispVal) - Chuẩn xác nhất vì đọc trực tiếp mắt thấy
+  if (dispVal) {
+    var strDisp = dispVal.toString().trim();
+    if (strDisp) {
+      var pDisp = parseDatePartsGS(strDisp);
+      if (pDisp) {
+        return (pDisp.d === todayD && pDisp.m === todayM && pDisp.y === todayY);
+      }
+      if (strDisp.indexOf(todayVN) !== -1 || strDisp.indexOf(todayISO) !== -1) return true;
+    }
+  }
+
+  // 2. Đối chiếu với mã id_dat (Ví dụ: S8-20260912-001 hoặc S8-20260911-002)
+  if (idDat) {
+    var idStr = idDat.toString().trim();
+    if (idStr.indexOf(todayCompact) !== -1) {
+      return true;
+    }
+    // Nếu trong mã id_dat có chứa ngày dạng YYYYMMDD khác ngày hôm nay, tuyệt đối không nhận nhầm
+    var idMatch = idStr.match(/\d{8}/);
+    if (idMatch && idMatch[0] !== todayCompact) {
+      return false;
+    }
+  }
+
+  // 3. Kiểm tra ô ngày sheetDateVal
+  if (sheetDateVal !== null && sheetDateVal !== undefined && sheetDateVal !== "") {
+    var p = parseDatePartsGS(sheetDateVal);
+    if (p) {
+      return (p.d === todayD && p.m === todayM && p.y === todayY);
+    }
+
+    var str = sheetDateVal.toString().trim();
+    if (str.indexOf(todayVN) !== -1 || str.indexOf(todayISO) !== -1 || str.indexOf(todayCompact) !== -1) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Chuẩn hóa tên tiêu đề cột: bỏ dấu tiếng Việt, ký tự đặc biệt để ánh xạ chính xác 100%
+ */
+function normalizeHeaderNameGS(str) {
+  if (!str) return "";
+  var s = str.toString().trim().toLowerCase();
+  s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  s = s.replace(/[đĐ]/g, "d");
+  s = s.replace(/[\s_\-\.\:\,\;\/\(\)\[\]]/g, "");
+  return s;
+}
+
+/**
+ * Tự động ánh xạ chỉ số các cột của Sheet DATBAN (đảm bảo không bị lệch cột khi n8n ghi thêm/đổi cột/có dấu tiếng Việt)
  */
 function mapDatBanColumns(headerRow) {
   var map = {
@@ -1046,24 +1421,65 @@ function mapDatBanColumns(headerRow) {
   };
   if (!headerRow || !headerRow.length) return map;
   for (var i = 0; i < headerRow.length; i++) {
-    var h = (headerRow[i] || "").toString().trim().toLowerCase().replace(/[\s_\-]/g, "");
-    if (h === "iddat" || h === "madon" || h === "id" || h === "ma") map.id_dat = i;
-    else if (h === "ngaydat" || h === "ngay" || h === "date") map.ngay_dat = i;
-    else if (h === "giodat" || h === "gio" || h === "time") map.gio_dat = i;
-    else if (h === "tenkhach" || h === "khachhang" || h === "ten") map.ten_khach = i;
-    else if (h === "sdt" || h === "sodienthoai" || h === "phone") map.sdt = i;
-    else if (h === "sokhach" || h === "soluongkhach" || h === "pax") map.so_khach = i;
-    else if (h === "banxep" || h === "danhsachban" || h === "ban" || h === "soban") map.ban_xep = i;
-    else if (h === "yeucauban" || h === "yeucau") map.yeu_cau_ban = i;
-    else if (h === "datmontruoc" || h === "montruoc") map.dat_mon_truoc = i;
-    else if (h === "datcoc" || h === "tiencoc" || h === "sotiencoc") {
+    var rawH = (headerRow[i] || "").toString().trim();
+    var h = normalizeHeaderNameGS(rawH);
+    if (h === "iddat" || h === "madon" || h === "id" || h === "ma" || h === "madatban") map.id_dat = i;
+    else if (h === "ngaydat" || h === "ngay" || h === "date" || h === "ngayan") map.ngay_dat = i;
+    else if (h === "giodat" || h === "gio" || h === "time" || h === "gioden") map.gio_dat = i;
+    else if (h === "tenkhach" || h === "khachhang" || h === "ten" || h === "customer") map.ten_khach = i;
+    else if (h === "sdt" || h === "sodienthoai" || h === "phone" || h === "dienthoai") map.sdt = i;
+    else if (h === "sokhach" || h === "soluongkhach" || h === "pax" || h === "soluong") map.so_khach = i;
+    else if (h === "banxep" || h === "danhsachban" || h === "ban" || h === "soban" || h === "maban") map.ban_xep = i;
+    else if (h === "yeucauban" || h === "yeucau" || h === "vitri") map.yeu_cau_ban = i;
+    else if (h === "datmontruoc" || h === "montruoc" || h === "mondat" || h === "datmon") map.dat_mon_truoc = i;
+    else if (h === "datcoc" || h === "tiencoc" || h === "sotiencoc" || h === "tiendatcoc") {
       if (h === "datcoc") map.dat_coc = i;
       else map.tien_coc = i;
     }
     else if (h === "trangthai" || h === "status") map.trang_thai = i;
-    else if (h === "nguoinhap" || h === "nhanvien") map.nguoi_nhap = i;
-    else if (h === "thoigiannhap" || h === "timestamp") map.thoi_gian_nhap = i;
+    else if (h === "nguoinhap" || h === "nhanvien" || h === "staff") map.nguoi_nhap = i;
+    else if (h === "thoigiannhap" || h === "timestamp" || h === "thoigian") map.thoi_gian_nhap = i;
     else if (h === "ghichu" || h === "note") map.ghi_chu = i;
+  }
+  return map;
+}
+
+/**
+ * Tự động ánh xạ chỉ số các cột của Sheet DATMON
+ */
+function mapDatMonColumns(headerRow) {
+  var map = {
+    id_mon: 0,
+    id_dat: 1,
+    ngay_dat: 2,
+    gio_dat: 3,
+    danh_sach_ban: 4,
+    ten_mon: 5,
+    so_luong: 6,
+    don_gia: 7,
+    thanh_tien: 8,
+    ghi_chu: 9,
+    trang_thai_mon: 10,
+    ten_khach: 11,
+    so_khach: 12
+  };
+  if (!headerRow || !headerRow.length) return map;
+  for (var i = 0; i < headerRow.length; i++) {
+    var rawH = (headerRow[i] || "").toString().trim();
+    var h = normalizeHeaderNameGS(rawH);
+    if (h === "idmon" || h === "mamon") map.id_mon = i;
+    else if (h === "iddat" || h === "madon" || h === "id" || h === "ma") map.id_dat = i;
+    else if (h === "ngaydat" || h === "ngay" || h === "date") map.ngay_dat = i;
+    else if (h === "giodat" || h === "gio" || h === "giolenmon" || h === "time") map.gio_dat = i;
+    else if (h === "ban" || h === "danhsachban" || h === "soban" || h === "tenban" || h === "banxep") map.danh_sach_ban = i;
+    else if (h === "tenmon" || h === "tenmonan" || h === "monan" || h === "mon") map.ten_mon = i;
+    else if (h === "soluong" || h === "sl" || h === "qty") map.so_luong = i;
+    else if (h === "dongia" || h === "gia" || h === "price") map.don_gia = i;
+    else if (h === "thanhtien" || h === "tongtien" || h === "total") map.thanh_tien = i;
+    else if (h === "ghichu" || h === "ghichubep" || h === "ghichudaubep" || h === "note") map.ghi_chu = i;
+    else if (h === "trangthaimon" || h === "trangthai" || h === "status") map.trang_thai_mon = i;
+    else if (h === "tenkhach" || h === "khachhang" || h === "khach") map.ten_khach = i;
+    else if (h === "sokhach" || h === "soluongkhach" || h === "pax") map.so_khach = i;
   }
   return map;
 }
@@ -1153,26 +1569,45 @@ function formatTimeCellGS(val, displayVal) {
 }
 
 /**
- * Cập nhật cột H trong CONFIG_BAN thành BLOCK hoặc ACTIVE
+ * Cập nhật cột trạng thái trong CONFIG_BAN thành BLOCK hoặc ACTIVE
  */
 function updateConfigBanStatus(reqTablesClean, newStatus) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var configSheet = ss.getSheetByName("CONFIG_BAN");
-  if (!configSheet) return;
-  
-  var data = configSheet.getDataRange().getValues();
-  var statusRanges = [];
-  for (var i = 1; i < data.length; i++) {
-    var maBan = data[i][1]; // Cột B
-    if (!maBan) continue;
-    
-    var cleanB = cleanTableCode(maBan.toString());
-    if (reqTablesClean.indexOf(cleanB) !== -1) {
-      statusRanges.push("H" + (i + 1));
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var configSheet = getSheetByNameRobust(ss, "CONFIG_BAN");
+    if (!configSheet) return;
+
+    var data = configSheet.getDataRange().getValues();
+    if (!data || data.length < 2) return;
+
+    var header = data[0];
+    var colMaBan = 1; // Mặc định cột B
+    var colStatus = 7; // Mặc định cột H (chỉ số 7)
+    for (var h = 0; h < header.length; h++) {
+      var hName = (header[h] || "").toString().trim().toLowerCase().replace(/[\s_\-]/g, "");
+      if (hName === "maban" || hName === "soban" || hName === "ban") colMaBan = h;
+      if (hName === "trangthai" || hName === "status") colStatus = h;
     }
-  }
-  if (statusRanges.length > 0) {
-    configSheet.getRangeList(statusRanges).setValue(newStatus); // Cột H
+
+    var colStatus1Based = colStatus + 1;
+    var maxCols = configSheet.getMaxColumns();
+    if (maxCols < colStatus1Based) {
+      configSheet.insertColumnsAfter(maxCols, colStatus1Based - maxCols);
+    }
+
+    for (var i = 1; i < data.length; i++) {
+      var maBan = data[i][colMaBan];
+      if (!maBan) continue;
+
+      var cleanB = cleanTableCode(maBan.toString());
+      if (reqTablesClean.indexOf(cleanB) !== -1) {
+        try {
+          configSheet.getRange(i + 1, colStatus1Based).setValue(newStatus);
+        } catch (eR) {}
+      }
+    }
+  } catch (err) {
+    Logger.log("updateConfigBanStatus note: " + err);
   }
 }
 
@@ -1183,16 +1618,23 @@ function getAllBookingsList(ss, filterDate) {
   var sheet = getSheetByNameRobust(ss, "DATBAN");
   if (!sheet) return [];
   var data = sheet.getDataRange().getValues();
-  var displayData = sheet.getDataRange().getDisplayValues();
+  var displayData = null;
+  if (data.length > 1) {
+    try {
+      displayData = sheet.getRange(1, 2, data.length, 2).getDisplayValues();
+    } catch (eDisp) {}
+  }
   var bookings = [];
 
   for (var i = 1; i < data.length; i++) {
     var row = data[i];
-    var dispRow = (displayData && displayData[i]) ? displayData[i] : [];
+    var dispNgay = (displayData && displayData[i]) ? displayData[i][0] : "";
+    var dispGio = (displayData && displayData[i]) ? displayData[i][1] : "";
     if (!row[0] && !row[1] && !row[3]) continue;
 
     if (filterDate && filterDate !== "ALL") {
-      if (!areDatesMatchingGS(row[1], filterDate)) continue;
+      var idDatCheck = row[0] ? row[0].toString().trim() : "";
+      if (!areDatesMatchingGS(row[1], filterDate, dispNgay, idDatCheck)) continue;
     }
 
     var idDatStr = row[0] ? row[0].toString().trim() : ("N8N-R" + (i + 1));
@@ -1201,7 +1643,7 @@ function getAllBookingsList(ss, filterDate) {
     var bansArray = formattedBanStr ? formattedBanStr.split(", ") : splitTableListGS(rawBanStr);
 
     // Chuẩn hóa giờ đặt độc lập múi giờ (tránh hoàn toàn lỗi 19:00 biến thành 10:06 AM)
-    var gioDatStr = formatTimeCellGS(row[2], dispRow[2]);
+    var gioDatStr = formatTimeCellGS(row[2], dispGio);
 
     bookings.push({
       id_dat: idDatStr,
@@ -1454,8 +1896,7 @@ function getActiveMenusForBooking(ss, idDat) {
 function getAllActiveMenusFromDatMon(ss, options) {
   var sheet = getOrCreateDatMonSheet(ss);
   if (!sheet) return [];
-  // Tự động dồn các dòng trống nếu dữ liệu bị trôi xuống xa (dòng 1001)
-  compactDatMonSheet(sheet);
+  // Lưu ý: KHÔNG gọi compactDatMonSheet khi đọc dữ liệu để tránh thao tác ghi Sheet gây chậm
 
   var data = sheet.getDataRange().getValues();
   var displayData = sheet.getDataRange().getDisplayValues();
@@ -1486,7 +1927,8 @@ function getAllActiveMenusFromDatMon(ss, options) {
     var rowIdDat = row[colMap.id_dat] ? row[colMap.id_dat].toString().trim() : "";
     var trangThai = row[colMap.trang_thai_mon] ? row[colMap.trang_thai_mon].toString().trim().toUpperCase() : "ACTIVE";
     var matchesId = !hasIdFilter || Boolean(filterIds[rowIdDat.toUpperCase()]);
-    var matchesDate = filterDate === "ALL" || areDatesMatchingGS(row[colMap.ngay_dat], filterDate);
+    var rowDispNgay = dispRow[colMap.ngay_dat] || "";
+    var matchesDate = filterDate === "ALL" || areDatesMatchingGS(row[colMap.ngay_dat], filterDate, rowDispNgay, rowIdDat);
     if (!matchesDate && filterDateCompact && rowIdDat.indexOf(filterDateCompact) !== -1) matchesDate = true;
 
     if (rowIdDat && trangThai !== "ĐÃ XÓA" && matchesId && matchesDate) {
@@ -1836,52 +2278,62 @@ function handleDeleteMenuGS(ss, data) {
 // ============================================================================
 
 /**
- * Ghi trạng thái rỗng đẹp mắt cho tab VIEW_HOMNAY khi chưa có bàn nào hôm nay
+ * Ghi trạng thái rỗng cho tab VIEW_HOMNAY khi chưa có bàn nào hôm nay mà KHÔNG phá vỡ tỉ lệ cột
  */
 function writeEmptyViewHomNay(viewSheet, todayStr) {
-  viewSheet.clear();
   var headers = [
     "STT", "ID ĐẶT", "GIỜ ĐẶT", "BÀN XẾP", "TÊN KHÁCH", 
     "SỐ ĐIỆN THOẠI", "SỐ KHÁCH", "TRẠNG THÁI", "TIỀN CỌC", 
     "MÓN ĐÃ ĐẶT (TỪ DATMON)", "GHI CHÚ", "NGƯỜI NHẬP"
   ];
-  viewSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  var lastRow = viewSheet.getLastRow();
+  if (lastRow > 1) {
+    viewSheet.getRange(2, 1, lastRow - 1, viewSheet.getMaxColumns()).clearContent();
+  }
+  if (lastRow === 0) {
+    viewSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    viewSheet.getRange(1, 1, 1, headers.length)
+             .setBackground("#1e293b").setFontColor("#f8fafc").setFontWeight("bold").setHorizontalAlignment("center");
+    viewSheet.setFrozenRows(1);
+  }
   viewSheet.getRange(2, 1, 1, headers.length).setValues([[
     1, "-", "-", "-", "Hôm nay chưa có đơn đặt bàn nào (" + todayStr + ")", "-", "-", "-", "-", "-", "-", "-"
   ]]);
-  viewSheet.getRange(1, 1, 1, headers.length)
-           .setBackground("#1e293b").setFontColor("#f8fafc").setFontWeight("bold").setHorizontalAlignment("center");
-  viewSheet.setFrozenRows(1);
-  viewSheet.autoResizeColumns(1, headers.length);
 }
 
 /**
- * Ghi trạng thái rỗng đẹp mắt cho tab VIEW_BEP_HOMNAY khi chưa có món nào hôm nay
+ * Ghi trạng thái rỗng cho tab VIEW_BEP_HOMNAY khi chưa có món nào hôm nay mà KHÔNG phá vỡ tỉ lệ cột
  */
 function writeEmptyViewBepHomNay(viewSheet, todayStr) {
-  viewSheet.clear();
   var headers = [
     "STT", "GIỜ LÊN MÓN", "BÀN", "TÊN MÓN ĂN", "SỐ LƯỢNG", 
     "GHI CHÚ ĐẦU BẾP", "TÊN KHÁCH", "SỐ KHÁCH", 
     "TRẠNG THÁI MÓN", "MÃ MÓN", "MÃ ĐƠN"
   ];
-  viewSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  var lastRow = viewSheet.getLastRow();
+  if (lastRow > 1) {
+    viewSheet.getRange(2, 1, lastRow - 1, viewSheet.getMaxColumns()).clearContent();
+    viewSheet.getRange(2, 6, lastRow - 1, 1).setBackground(null).setFontColor(null).setFontWeight("normal");
+  }
+  if (lastRow === 0) {
+    viewSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    viewSheet.getRange(1, 1, 1, headers.length)
+             .setBackground("#065f46").setFontColor("#ffffff").setFontWeight("bold").setHorizontalAlignment("center");
+    viewSheet.setFrozenRows(1);
+  }
   viewSheet.getRange(2, 1, 1, headers.length).setValues([[
     1, "-", "-", "Hôm nay chưa có món nào cần nấu (" + todayStr + ")", "-", "-", "-", "-", "-", "-", "-"
   ]]);
-  viewSheet.getRange(1, 1, 1, headers.length)
-           .setBackground("#065f46").setFontColor("#ffffff").setFontWeight("bold").setHorizontalAlignment("center");
-  viewSheet.setFrozenRows(1);
-  viewSheet.autoResizeColumns(1, headers.length);
 }
 
 /**
  * Cập nhật tab VIEW_HOMNAY dành cho Chủ SMO và Quản lý
  * Kiểm tra ngày trong tab DATBAN có trùng với ngày hiện tại (múi giờ VN) hay không.
- * Nếu có thì tự điền đầy đủ thông tin vào tab VIEW_HOMNAY.
+ * Nếu có thì tự điền đầy đủ thông tin vào tab VIEW_HOMNAY đúng định dạng và KHÔNG phá vỡ tỉ lệ cột.
  */
 function updateViewHomNay(ss) {
   if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureSpreadsheetTimezoneVN(ss);
   var datbanSheet = getSheetByNameRobust(ss, "DATBAN");
   if (!datbanSheet) return { status: "error", message: "Không tìm thấy sheet DATBAN" };
 
@@ -1927,14 +2379,16 @@ function updateViewHomNay(ss) {
     var r = rows[i];
     var dispR = dispRows[i] || [];
     var ngayDatRaw = r[colMap.ngay_dat];
+    var dispNgay = dispR[colMap.ngay_dat] || "";
     var idDat = r[colMap.id_dat] ? r[colMap.id_dat].toString().trim() : "";
 
     // KIỂM TRA NGÀY TRONG TAB DATBAN CÓ TRÙNG VỚI NGÀY HIỆN TẠI KHÔNG
-    if (isDateMatchingTodayGS(ngayDatRaw, idDat)) {
+    if (isDateMatchingTodayGS(ngayDatRaw, idDat, dispNgay)) {
       var gioDat = formatTimeCellGS(r[colMap.gio_dat], dispR[colMap.gio_dat]) || "18:00";
       var tenKhach = r[colMap.ten_khach] ? r[colMap.ten_khach].toString() : "Khách Lẻ";
-      var sdt = r[colMap.sdt] ? ("'" + r[colMap.sdt].toString()) : "";
-      var soKhach = r[colMap.so_khach] || 0;
+      var rawSdt = dispR[colMap.sdt] || (r[colMap.sdt] ? r[colMap.sdt].toString() : "");
+      var sdt = rawSdt ? rawSdt.toString().replace(/^'+/, '') : "";
+      var soKhach = Number(r[colMap.so_khach]) || 0;
       var rawBan = r[colMap.ban_xep] ? r[colMap.ban_xep].toString() : "";
       var banXep = formatBanListString(rawBan) || rawBan;
       var trangThai = r[colMap.trang_thai] ? r[colMap.trang_thai].toString() : "ĐÃ ĐẶT";
@@ -1966,23 +2420,38 @@ function updateViewHomNay(ss) {
     return (a.gio_dat || "").localeCompare(b.gio_dat || "");
   });
 
-  // Ghi vào sheet VIEW_HOMNAY
-  viewSheet.clear();
   var headers = [
     "STT", "ID ĐẶT", "GIỜ ĐẶT", "BÀN XẾP", "TÊN KHÁCH", 
     "SỐ ĐIỆN THOẠI", "SỐ KHÁCH", "TRẠNG THÁI", "TIỀN CỌC", 
     "MÓN ĐÃ ĐẶT (TỪ DATMON)", "GHI CHÚ", "NGƯỜI NHẬP"
   ];
 
-  var outputData = [headers];
+  // Khởi tạo dòng tiêu đề nếu sheet mới tinh
+  var lastRow = viewSheet.getLastRow();
+  if (lastRow === 0) {
+    viewSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    viewSheet.getRange(1, 1, 1, headers.length)
+             .setBackground("#1e293b")
+             .setFontColor("#f8fafc")
+             .setFontWeight("bold")
+             .setHorizontalAlignment("center");
+    viewSheet.setFrozenRows(1);
+  }
+
+  // Xóa sạch nội dung cũ từ dòng 2 trở đi mà KHÔNG xóa độ rộng cột và định dạng sẵn có
+  if (lastRow > 1) {
+    viewSheet.getRange(2, 1, lastRow - 1, viewSheet.getMaxColumns()).clearContent();
+  }
+
+  var dataRows = [];
   if (todayBookings.length === 0) {
-    outputData.push([
+    dataRows.push([
       1, "-", "-", "-", "Hôm nay chưa có đơn đặt bàn nào (" + todayStr + ")", "-", "-", "-", "-", "-", "-", "-"
     ]);
   } else {
     for (var k = 0; k < todayBookings.length; k++) {
       var b = todayBookings[k];
-      outputData.push([
+      dataRows.push([
         k + 1,
         b.id_dat,
         b.gio_dat,
@@ -1999,21 +2468,20 @@ function updateViewHomNay(ss) {
     }
   }
 
-  viewSheet.getRange(1, 1, outputData.length, headers.length).setValues(outputData);
+  // Đảm bảo sheet đủ số cột và hàng để ghi dữ liệu an toàn
+  if (viewSheet.getMaxColumns() < headers.length) {
+    viewSheet.insertColumnsAfter(viewSheet.getMaxColumns(), headers.length - viewSheet.getMaxColumns());
+  }
+  if (viewSheet.getMaxRows() < dataRows.length + 1) {
+    viewSheet.insertRowsAfter(viewSheet.getMaxRows(), (dataRows.length + 1) - viewSheet.getMaxRows() + 5);
+  }
 
-  // Định dạng tiêu đề và màu sắc
-  var headerRange = viewSheet.getRange(1, 1, 1, headers.length);
-  headerRange.setBackground("#1e293b")
-             .setFontColor("#f8fafc")
-             .setFontWeight("bold")
-             .setHorizontalAlignment("center");
+  // Ghi dữ liệu vào sheet từ dòng 2
+  viewSheet.getRange(2, 1, dataRows.length, headers.length).setValues(dataRows);
 
-  // Định dạng viền và căn chỉnh
-  var allDataRange = viewSheet.getRange(1, 1, outputData.length, headers.length);
+  // Định dạng viền nhẹ cho các dòng dữ liệu mà không ảnh hưởng tỉ lệ cột
+  var allDataRange = viewSheet.getRange(1, 1, dataRows.length + 1, headers.length);
   allDataRange.setBorder(true, true, true, true, true, true, "#cbd5e1", SpreadsheetApp.BorderStyle.SOLID);
-
-  viewSheet.setFrozenRows(1);
-  viewSheet.autoResizeColumns(1, headers.length);
 
   return { status: "success", count: todayBookings.length, date: todayStr };
 }
@@ -2022,9 +2490,11 @@ function updateViewHomNay(ss) {
  * Cập nhật tab VIEW_BEP_HOMNAY dành cho Đầu bếp và Bếp trưởng
  * Kiểm tra ngày trong tab DATMON có trùng với ngày hiện tại (múi giờ VN) hay không.
  * Tự động đối chiếu chéo với mã ID đặt bàn hôm nay từ DATBAN để không bao giờ sót món.
+ * Bảo toàn 100% tỉ lệ độ rộng cột và căn chỉnh mà người dùng đã thiết lập trên Google Sheets.
  */
 function updateViewBepHomNay(ss) {
   if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureSpreadsheetTimezoneVN(ss);
   var datmonSheet = getSheetByNameRobust(ss, "DATMON");
   if (!datmonSheet) return { status: "error", message: "Không tìm thấy sheet DATMON" };
 
@@ -2050,11 +2520,14 @@ function updateViewBepHomNay(ss) {
   var datbanSheet = getSheetByNameRobust(ss, "DATBAN");
   if (datbanSheet && datbanSheet.getLastRow() > 1) {
     var dbData = datbanSheet.getDataRange().getValues();
+    var dbDispData = datbanSheet.getDataRange().getDisplayValues();
     var dbColMap = mapDatBanColumns(dbData[0]);
     for (var b = 1; b < dbData.length; b++) {
       var rowB = dbData[b];
+      var dispRowB = dbDispData ? dbDispData[b] : [];
       var idDatB = rowB[dbColMap.id_dat] ? rowB[dbColMap.id_dat].toString().trim() : "";
-      if (idDatB && isDateMatchingTodayGS(rowB[dbColMap.ngay_dat], idDatB)) {
+      var dispNgayB = dispRowB ? dispRowB[dbColMap.ngay_dat] : "";
+      if (idDatB && isDateMatchingTodayGS(rowB[dbColMap.ngay_dat], idDatB, dispNgayB)) {
         todayBookingIdSet[idDatB] = true;
       }
     }
@@ -2071,10 +2544,11 @@ function updateViewBepHomNay(ss) {
     if (trangThaiMon === "ĐÃ XÓA") continue;
 
     var ngayDatRaw = r[colMap.ngay_dat];
+    var dispNgayDat = dispR[colMap.ngay_dat] || "";
     var isToday = false;
 
     // KIỂM TRA NGÀY TRONG TAB DATMON CÓ TRÙNG VỚI NGÀY HIỆN TẠI KHÔNG
-    if (isDateMatchingTodayGS(ngayDatRaw, idDat)) {
+    if (isDateMatchingTodayGS(ngayDatRaw, idDat, dispNgayDat)) {
       isToday = true;
     } else if (idDat && todayBookingIdSet[idDat]) {
       // Đối chiếu chéo với đơn hôm nay từ DATBAN
@@ -2093,7 +2567,7 @@ function updateViewBepHomNay(ss) {
         so_luong: Number(r[colMap.so_luong]) || 1,
         ghi_chu_bep: r[colMap.ghi_chu] ? r[colMap.ghi_chu].toString() : "",
         ten_khach: r[colMap.ten_khach] ? r[colMap.ten_khach].toString() : "",
-        so_khach: r[colMap.so_khach] || "",
+        so_khach: Number(r[colMap.so_khach]) || "",
         trang_thai_mon: trangThaiMon,
         id_mon: idMon,
         id_dat: idDat
@@ -2108,23 +2582,39 @@ function updateViewBepHomNay(ss) {
     return (a.ten_mon || "").localeCompare(b.ten_mon || "");
   });
 
-  // Ghi vào tab VIEW_BEP_HOMNAY
-  viewSheet.clear();
   var headers = [
     "STT", "GIỜ LÊN MÓN", "BÀN", "TÊN MÓN ĂN", "SỐ LƯỢNG", 
     "GHI CHÚ ĐẦU BẾP", "TÊN KHÁCH", "SỐ KHÁCH", 
     "TRẠNG THÁI MÓN", "MÃ MÓN", "MÃ ĐƠN"
   ];
 
-  var outputData = [headers];
+  // Khởi tạo dòng tiêu đề nếu sheet mới tinh
+  var lastRow = viewSheet.getLastRow();
+  if (lastRow === 0) {
+    viewSheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    viewSheet.getRange(1, 1, 1, headers.length)
+             .setBackground("#065f46")
+             .setFontColor("#ffffff")
+             .setFontWeight("bold")
+             .setHorizontalAlignment("center");
+    viewSheet.setFrozenRows(1);
+  }
+
+  // Xóa nội dung cũ từ dòng 2 trở đi mà KHÔNG xóa tỉ lệ độ rộng cột
+  if (lastRow > 1) {
+    viewSheet.getRange(2, 1, lastRow - 1, viewSheet.getMaxColumns()).clearContent();
+    viewSheet.getRange(2, 6, lastRow - 1, 1).setBackground(null).setFontColor(null).setFontWeight("normal");
+  }
+
+  var dataRows = [];
   if (todayDishes.length === 0) {
-    outputData.push([
+    dataRows.push([
       1, "-", "-", "Hôm nay chưa có món nào cần nấu (" + todayStr + ")", "-", "-", "-", "-", "-", "-", "-"
     ]);
   } else {
     for (var k = 0; k < todayDishes.length; k++) {
       var d = todayDishes[k];
-      outputData.push([
+      dataRows.push([
         k + 1,
         d.gio_dat,
         d.ban,
@@ -2140,37 +2630,36 @@ function updateViewBepHomNay(ss) {
     }
   }
 
-  viewSheet.getRange(1, 1, outputData.length, headers.length).setValues(outputData);
+  // Đảm bảo sheet đủ số cột và hàng để ghi dữ liệu an toàn
+  if (viewSheet.getMaxColumns() < headers.length) {
+    viewSheet.insertColumnsAfter(viewSheet.getMaxColumns(), headers.length - viewSheet.getMaxColumns());
+  }
+  if (viewSheet.getMaxRows() < dataRows.length + 1) {
+    viewSheet.insertRowsAfter(viewSheet.getMaxRows(), (dataRows.length + 1) - viewSheet.getMaxRows() + 5);
+  }
 
-  // Định dạng tiêu đề màu xanh bếp (Emerald/Green)
-  var headerRange = viewSheet.getRange(1, 1, 1, headers.length);
-  headerRange.setBackground("#065f46")
-             .setFontColor("#ffffff")
-             .setFontWeight("bold")
-             .setHorizontalAlignment("center");
+  // Ghi dữ liệu vào sheet
+  viewSheet.getRange(2, 1, dataRows.length, headers.length).setValues(dataRows);
 
   // Viền bảng
-  var allRange = viewSheet.getRange(1, 1, outputData.length, headers.length);
+  var allRange = viewSheet.getRange(1, 1, dataRows.length + 1, headers.length);
   allRange.setBorder(true, true, true, true, true, true, "#cbd5e1", SpreadsheetApp.BorderStyle.SOLID);
 
-  // Tô màu cột ghi chú bằng một lần ghi thay vì gọi API cho từng ô.
+  // Tô màu cả cột ghi chú bằng một lần ghi thay vì gọi API cho từng ô.
   var noteBackgrounds = [];
   var noteFontColors = [];
   var noteFontWeights = [];
-  for (var rowIdx = 1; rowIdx < outputData.length; rowIdx++) {
-    var noteVal = outputData[rowIdx][5];
+  for (var rowIdx = 0; rowIdx < dataRows.length; rowIdx++) {
+    var noteVal = dataRows[rowIdx][5];
     var hasNote = noteVal && noteVal.toString().trim() !== "" && noteVal.toString().trim() !== "-";
     noteBackgrounds.push([hasNote ? "#fef3c7" : null]);
     noteFontColors.push([hasNote ? "#b45309" : null]);
     noteFontWeights.push([hasNote ? "bold" : "normal"]);
   }
-  viewSheet.getRange(2, 6, outputData.length - 1, 1)
+  viewSheet.getRange(2, 6, dataRows.length, 1)
            .setBackgrounds(noteBackgrounds)
            .setFontColors(noteFontColors)
            .setFontWeights(noteFontWeights);
-
-  viewSheet.setFrozenRows(1);
-  viewSheet.autoResizeColumns(1, headers.length);
 
   return { status: "success", count: todayDishes.length, date: todayStr };
 }
@@ -2235,5 +2724,452 @@ function onChange(e) {
     syncAllViewsSafely(ss);
   } catch (err) {
     Logger.log("onChange error: " + err);
+  }
+}
+
+// ============================================================================
+// 6. TÍNH NĂNG TỰ ĐỘNG SẮP XẾP DATBAN & DATMON LÚC 5:00 SÁNG HẰNG NGÀY
+// ============================================================================
+
+/**
+ * Trích xuất khóa sắp xếp Ngày (dạng số YYYYMMDD) để so sánh thứ tự
+ * Tương lai -> Quá khứ (Giá trị số lớn hơn xếp trước)
+ */
+function getRowDateSortKeyGS(rawDate, dispDate, idDat) {
+  var p = null;
+  if (rawDate) {
+    p = parseDatePartsGS(rawDate);
+  }
+  if (!p && dispDate) {
+    p = parseDatePartsGS(dispDate);
+  }
+  if (!p && idDat) {
+    var m = idDat.toString().match(/(\d{4})(\d{2})(\d{2})/);
+    if (m) {
+      p = { y: parseInt(m[1], 10), m: parseInt(m[2], 10), d: parseInt(m[3], 10) };
+    }
+  }
+  if (!p) return 0;
+  return p.y * 10000 + p.m * 100 + p.d;
+}
+
+/**
+ * Trích xuất phút trong ngày (0 - 1439) để sắp xếp giờ trong cùng một ngày
+ */
+function getRowMinuteSortKeyGS(rawTime, dispTime) {
+  var tStr = formatTimeCellGS(rawTime, dispTime);
+  if (!tStr) return 720; // Mặc định 12:00
+  var parts = tStr.split(":");
+  if (parts.length >= 2) {
+    return (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+  }
+  return 720;
+}
+
+/**
+ * Sắp xếp dữ liệu 2 Tab DATBAN và DATMON theo Ngày từ tương lai xuống quá khứ (Descending)
+ * Trong cùng 1 ngày: sắp xếp giờ đón khách tăng dần để tiện theo dõi ca làm việc.
+ */
+function sortDatBanAndDatMonDesc(ss) {
+  if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureSpreadsheetTimezoneVN(ss);
+
+  var summary = {
+    datban_rows_sorted: 0,
+    datmon_rows_sorted: 0,
+    timestamp: Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "dd/MM/yyyy HH:mm:ss")
+  };
+
+  // 1. SẮP XẾP TAB DATBAN
+  try {
+    var datbanSheet = getSheetByNameRobust(ss, "DATBAN");
+    if (datbanSheet && datbanSheet.getLastRow() > 2) {
+      var numRows = datbanSheet.getLastRow() - 1;
+      var numCols = datbanSheet.getLastColumn();
+      var dataRange = datbanSheet.getRange(2, 1, numRows, numCols);
+      var values = dataRange.getValues();
+      var dispValues = dataRange.getDisplayValues();
+      var header = datbanSheet.getRange(1, 1, 1, numCols).getValues()[0];
+      var colMap = mapDatBanColumns(header);
+
+      // Ghép hàng với chỉ số và sort key
+      var decorated = [];
+      for (var i = 0; i < values.length; i++) {
+        var rowVal = values[i];
+        var rowDisp = dispValues ? dispValues[i] : [];
+        var rawD = rowVal[colMap.ngay_dat];
+        var dispD = rowDisp ? rowDisp[colMap.ngay_dat] : "";
+        var idD = rowVal[colMap.id_dat] ? rowVal[colMap.id_dat].toString() : "";
+        var rawT = rowVal[colMap.gio_dat];
+        var dispT = rowDisp ? rowDisp[colMap.gio_dat] : "";
+
+        var dateKey = getRowDateSortKeyGS(rawD, dispD, idD);
+        var timeKey = getRowMinuteSortKeyGS(rawT, dispT);
+
+        decorated.push({
+          rowVal: rowVal,
+          dateKey: dateKey,
+          timeKey: timeKey,
+          origIndex: i
+        });
+      }
+
+      // Sắp xếp: Ngày giảm dần (Tương lai -> Quá khứ). Nếu cùng ngày: Giờ tăng dần (sớm -> trễ)
+      decorated.sort(function(a, b) {
+        if (b.dateKey !== a.dateKey) {
+          return b.dateKey - a.dateKey; // Tương lai xuống quá khứ
+        }
+        if (a.timeKey !== b.timeKey) {
+          return a.timeKey - b.timeKey; // Cùng ngày thì giờ đón sớm lên trước
+        }
+        return a.origIndex - b.origIndex;
+      });
+
+      var sortedValues = decorated.map(function(item) {
+        return item.rowVal;
+      });
+
+      dataRange.setValues(sortedValues);
+      summary.datban_rows_sorted = sortedValues.length;
+    }
+  } catch (errDatBan) {
+    Logger.log("sortDatBan error: " + errDatBan);
+    summary.datban_error = errDatBan.toString();
+  }
+
+  // 2. SẮP XẾP TAB DATMON
+  try {
+    var datmonSheet = getSheetByNameRobust(ss, "DATMON");
+    if (datmonSheet && datmonSheet.getLastRow() > 2) {
+      var dmRows = datmonSheet.getLastRow() - 1;
+      var dmCols = datmonSheet.getLastColumn();
+      var dmRange = datmonSheet.getRange(2, 1, dmRows, dmCols);
+      var dmValues = dmRange.getValues();
+      var dmDispValues = dmRange.getDisplayValues();
+      var dmHeader = datmonSheet.getRange(1, 1, 1, dmCols).getValues()[0];
+      var dmColMap = mapDatMonColumns(dmHeader);
+
+      var dmDecorated = [];
+      for (var j = 0; j < dmValues.length; j++) {
+        var rVal = dmValues[j];
+        var rDisp = dmDispValues ? dmDispValues[j] : [];
+        var rRawD = rVal[dmColMap.ngay_dat];
+        var rDispD = rDisp ? rDisp[dmColMap.ngay_dat] : "";
+        var rIdD = rVal[dmColMap.id_dat] ? rVal[dmColMap.id_dat].toString() : "";
+        var rRawT = rVal[dmColMap.gio_dat];
+        var rDispT = rDisp ? rDisp[dmColMap.gio_dat] : "";
+
+        var dKey = getRowDateSortKeyGS(rRawD, rDispD, rIdD);
+        var tKey = getRowMinuteSortKeyGS(rRawT, rDispT);
+
+        dmDecorated.push({
+          rowVal: rVal,
+          dateKey: dKey,
+          timeKey: tKey,
+          origIndex: j
+        });
+      }
+
+      dmDecorated.sort(function(a, b) {
+        if (b.dateKey !== a.dateKey) {
+          return b.dateKey - a.dateKey; // Tương lai xuống quá khứ
+        }
+        if (a.timeKey !== b.timeKey) {
+          return a.timeKey - b.timeKey;
+        }
+        return a.origIndex - b.origIndex;
+      });
+
+      var dmSortedValues = dmDecorated.map(function(item) {
+        return item.rowVal;
+      });
+
+      dmRange.setValues(dmSortedValues);
+      summary.datmon_rows_sorted = dmSortedValues.length;
+    }
+  } catch (errDatMon) {
+    Logger.log("sortDatMon error: " + errDatMon);
+    summary.datmon_error = errDatMon.toString();
+  }
+
+  return summary;
+}
+
+/**
+ * Tự động kiểm tra và thực hiện routine bảo trì 5h sáng (Self-Healing / Auto-catchup)
+ * - Nếu đã qua 5:00 sáng múi giờ VN mà ngày hôm nay chưa chạy:
+ *   + Tự động sắp xếp lại 2 tab DATBAN và DATMON từ tương lai xuống quá khứ
+ *   + Tự động cập nhật lại 2 tab VIEW_HOMNAY và VIEW_BEP_HOMNAY theo đúng ngày hôm nay
+ *   + Tự động làm mới bộ nhớ đệm Cache
+ * - Tự động tạo Trigger 5h sáng nếu chưa tồn tại
+ */
+function ensureDailyMorningMaintenance(ss) {
+  try {
+    if (!ss) ss = SpreadsheetApp.getActiveSpreadsheet();
+    var now = new Date();
+    var todayVN = Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "yyyy-MM-dd");
+    var hourVN = parseInt(Utilities.formatDate(now, "Asia/Ho_Chi_Minh", "HH"), 10);
+
+    // Chỉ thực hiện bảo trì tự động nếu đã qua 5:00 sáng
+    if (hourVN < 5) return;
+
+    var props = PropertiesService.getScriptProperties();
+    var lastRun = props ? props.getProperty("LAST_5AM_ROUTINE_DATE") : null;
+
+    if (lastRun !== todayVN) {
+      Logger.log(">>> Phát hiện ngày mới " + todayVN + " đã qua 5h sáng chưa bảo trì. Bắt đầu tự động chạy bù...");
+      if (props) {
+        props.setProperty("LAST_5AM_ROUTINE_DATE", todayVN);
+      }
+      dailyMorningAutoSortAndSync();
+    }
+  } catch (err) {
+    Logger.log("ensureDailyMorningMaintenance note: " + err);
+  }
+}
+
+/**
+ * Tự động kiểm tra và khởi tạo Trigger 5h sáng nếu chưa có
+ */
+function ensureDaily5AMTriggerInstalled() {
+  try {
+    var triggers = ScriptApp.getProjectTriggers();
+    var hasTrigger = false;
+    for (var i = 0; i < triggers.length; i++) {
+      if (triggers[i].getHandlerFunction() === "dailyMorningAutoSortAndSync") {
+        hasTrigger = true;
+        break;
+      }
+    }
+    if (!hasTrigger) {
+      setupDaily5AMTrigger();
+    }
+  } catch (err) {
+    Logger.log("ensureDaily5AMTriggerInstalled note: " + err);
+  }
+}
+
+/**
+ * Hàm thực thi lúc 5:00 sáng mỗi ngày:
+ * 1. Tự động sắp xếp Tab DATBAN và DATMON (Ngày từ tương lai xuống quá khứ)
+ * 2. Tự động đồng bộ chuẩn xác tab VIEW_HOMNAY và VIEW_BEP_HOMNAY cho ngày mới
+ * 3. Làm mới bộ đệm Cache để Web App luôn hiển thị dữ liệu mới nhất
+ */
+function dailyMorningAutoSortAndSync() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  ensureSpreadsheetTimezoneVN(ss);
+
+  Logger.log(">>> Bắt đầu chạy routine 5:00 sáng hằng ngày...");
+  
+  // Bước 1: Sắp xếp
+  var sortInfo = sortDatBanAndDatMonDesc(ss);
+  Logger.log("Đã sắp xếp DATBAN & DATMON: " + JSON.stringify(sortInfo));
+
+  // Bước 2: Cập nhật 2 View hôm nay
+  syncAllViewsSafely(ss);
+  Logger.log("Đã cập nhật VIEW_HOMNAY & VIEW_BEP_HOMNAY.");
+
+  // Bước 3: Invalidate Cache
+  invalidateSodobaDynamicCache();
+  invalidateSodobaMasterMenuCache();
+  Logger.log("Đã làm mới Cache.");
+
+  try {
+    var todayVN = Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "yyyy-MM-dd");
+    PropertiesService.getScriptProperties().setProperty("LAST_5AM_ROUTINE_DATE", todayVN);
+  } catch (eProp) {}
+
+  return {
+    status: "success",
+    message: "Hoàn tất routine 5h sáng: Đã sắp xếp DATBAN & DATMON từ tương lai xuống quá khứ và cập nhật View ngày mới",
+    sortInfo: sortInfo
+  };
+}
+
+/**
+ * Cài đặt Trigger tự động kích hoạt hàm dailyMorningAutoSortAndSync lúc 5:00 sáng mỗi ngày
+ * Chạy hàm này 1 lần (hoặc qua Webhook / Menu Google Sheets) để kích hoạt
+ */
+function setupDaily5AMTrigger() {
+  try {
+    var triggers = ScriptApp.getProjectTriggers();
+    var existingCount = 0;
+    for (var i = 0; i < triggers.length; i++) {
+      if (triggers[i].getHandlerFunction() === "dailyMorningAutoSortAndSync") {
+        ScriptApp.deleteTrigger(triggers[i]);
+        existingCount++;
+      }
+    }
+
+    // Tạo Trigger lúc 5 giờ sáng mỗi ngày (theo múi giờ Asia/Ho_Chi_Minh)
+    var trigger = ScriptApp.newTrigger("dailyMorningAutoSortAndSync")
+      .timeBased()
+      .atHour(5)
+      .everyDays(1)
+      .inTimezone("Asia/Ho_Chi_Minh")
+      .create();
+
+    return {
+      status: "success",
+      message: "Đã thiết lập thành công Trigger tự động sắp xếp DATBAN & DATMON lúc 5:00 sáng hằng ngày (Múi giờ Asia/Ho_Chi_Minh)",
+      triggerId: trigger.getUniqueId(),
+      replacedTriggers: existingCount
+    };
+  } catch (err) {
+    Logger.log("setupDaily5AMTrigger error: " + err);
+    return {
+      status: "error",
+      message: "Lỗi cài đặt Trigger: " + err.toString()
+    };
+  }
+}
+
+/**
+ * Menu mở rộng ngay trên giao diện Google Sheets giúp Chủ SMO bấm 1 chạm thuận tiện
+ */
+function onOpen(e) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    ensureSpreadsheetTimezoneVN(ss);
+    ensureDailyMorningMaintenance(ss);
+    ensureDaily5AMTriggerInstalled();
+
+    var ui = SpreadsheetApp.getUi();
+    ui.createMenu("⭐ SMO Sơ Đồ Bàn")
+      .addItem("⚡ Cài đặt tự động sắp xếp lúc 5h sáng (Trigger)", "menuSetupDaily5AMTrigger")
+      .addItem("🔍 Kiểm tra trạng thái Trigger tự động 5h sáng", "menuCheckTriggerStatus")
+      .addSeparator()
+      .addItem("🔃 Sắp xếp DATBAN & DATMON (Tương lai -> Quá khứ)", "menuSortDatBanAndDatMonDesc")
+      .addItem("📊 Cập nhật ngay VIEW_HOMNAY & VIEW_BEP_HOMNAY", "menuSyncAllViews")
+      .addItem("🧹 Làm mới Cache dữ liệu Web App", "menuInvalidateCache")
+      .addToUi();
+  } catch (err) {
+    Logger.log("onOpen note: " + err);
+  }
+}
+
+/**
+ * Xử lý khi bấm "Cài đặt tự động sắp xếp lúc 5h sáng (Trigger)" trên Menu
+ * Hiển thị thông báo xác nhận rõ ràng rằng đây là CHỨC NĂNG TỰ ĐỘNG
+ */
+function menuSetupDaily5AMTrigger() {
+  var ui = SpreadsheetApp.getUi();
+  var res = setupDaily5AMTrigger();
+  if (res.status === "success") {
+    ui.alert(
+      "✅ ĐÃ CÀI ĐẶT THÀNH CÔNG TRIGGER TỰ ĐỘNG LÚC 5H SÁNG",
+      "Đây là CHỨC NĂNG TỰ ĐỘNG của hệ thống:\n\n" +
+      "• Máy chủ Google sẽ tự động kích hoạt vào lúc 5:00 SÁNG mỗi ngày (giờ Việt Nam Asia/Ho_Chi_Minh).\n" +
+      "• Tự động sắp xếp lại tab DATBAN và DATMON từ ngày mới nhất (tương lai) xuống quá khứ.\n" +
+      "• Tự động trích xuất và đồng bộ VIEW_HOMNAY và VIEW_BEP_HOMNAY cho đúng ngày mới.\n" +
+      "• Tự động xóa sạch Cache cũ để Web App luôn hiển thị sơ đồ bàn chuẩn xác nhất.\n\n" +
+      "👉 Bạn chỉ cần bấm cài đặt 1 lần duy nhất, Trigger sẽ tự động hoạt động vĩnh viễn (kể cả khi bạn tắt máy tính hay không mở Google Sheets)!",
+      ui.ButtonSet.OK
+    );
+  } else {
+    ui.alert("⚠️ LỖI CÀI ĐẶT TRIGGER", res.message, ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Kiểm tra xem Trigger 5:00 sáng đã được kích hoạt trên hệ thống chưa
+ */
+function menuCheckTriggerStatus() {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    var triggers = ScriptApp.getProjectTriggers();
+    var found = false;
+    for (var i = 0; i < triggers.length; i++) {
+      if (triggers[i].getHandlerFunction() === "dailyMorningAutoSortAndSync") {
+        found = true;
+        break;
+      }
+    }
+    if (found) {
+      ui.alert(
+        "Trạng thái Trigger Tự Động",
+        "✅ Trigger tự động 5:00 SÁNG đang HOẠT ĐỘNG BÌNH THƯỜNG!\n\n" +
+        "• Lịch chạy: 5:00 AM hằng ngày (Múi giờ Asia/Ho_Chi_Minh).\n" +
+        "• Nhiệm vụ: Tự động sắp xếp DATBAN, DATMON và cập nhật VIEW_HOMNAY, VIEW_BEP_HOMNAY, xóa Cache.",
+        ui.ButtonSet.OK
+      );
+    } else {
+      ui.alert(
+        "Trạng thái Trigger Tự Động",
+        "❌ Hiện chưa có Trigger tự động nào được kích hoạt.\n\n" +
+        "Vui lòng bấm '⚡ Cài đặt tự động sắp xếp lúc 5h sáng (Trigger)' trên menu ⭐ SMO Sơ Đồ Bàn để kích hoạt.",
+        ui.ButtonSet.OK
+      );
+    }
+  } catch (err) {
+    ui.alert("Lỗi kiểm tra Trigger", err.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Xử lý khi bấm sắp xếp dữ liệu trên Menu
+ */
+function menuSortDatBanAndDatMonDesc() {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var res = sortDatBanAndDatMonDesc(ss);
+    ui.alert(
+      "Sắp xếp dữ liệu",
+      "🔃 ĐÃ SẮP XẾP DỮ LIỆU THÀNH CÔNG!\n\n" +
+      "• Sheet DATBAN: Đã sắp xếp " + (res.datban_rows_sorted || 0) + " dòng.\n" +
+      "• Sheet DATMON: Đã sắp xếp " + (res.datmon_rows_sorted || 0) + " dòng.\n\n" +
+      "Thứ tự: Từ ngày mới nhất (tương lai) xuống ngày cũ nhất (quá khứ).",
+      ui.ButtonSet.OK
+    );
+  } catch (err) {
+    ui.alert("Lỗi sắp xếp dữ liệu", err.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Xử lý khi bấm Cập nhật VIEW trên Menu
+ */
+function menuSyncAllViews() {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var res = updateAllViewsToday(ss);
+    var todayStr = (res.view_homnay && res.view_homnay.date) ? res.view_homnay.date : Utilities.formatDate(new Date(), "Asia/Ho_Chi_Minh", "dd/MM/yyyy");
+    var countBan = (res.view_homnay && res.view_homnay.count) ? res.view_homnay.count : 0;
+    var countBep = (res.view_bep_homnay && res.view_bep_homnay.count) ? res.view_bep_homnay.count : 0;
+
+    var note = countBan > 0
+      ? "✅ 2 VIEW đã sẵn sàng phục vụ ca làm việc hôm nay!"
+      : "⚠️ Chú ý: Sheet DATBAN chưa có đơn nào khớp với ngày hôm nay (" + todayStr + "). Vui lòng kiểm tra cột Ngày Đặt trên tab DATBAN.";
+
+    ui.alert(
+      "Cập nhật 2 VIEW hôm nay",
+      "📊 ĐÃ ĐỒNG BỘ 2 VIEW CHO NGÀY HÔM NAY (" + todayStr + "):\n\n" +
+      "• VIEW_HOMNAY: " + countBan + " đơn đặt bàn.\n" +
+      "• VIEW_BEP_HOMNAY: " + countBep + " món ăn cần nấu/chuẩn bị.\n\n" +
+      note,
+      ui.ButtonSet.OK
+    );
+  } catch (err) {
+    ui.alert("Lỗi cập nhật VIEW", err.toString(), ui.ButtonSet.OK);
+  }
+}
+
+/**
+ * Xử lý khi bấm Làm mới Cache trên Menu
+ */
+function menuInvalidateCache() {
+  var ui = SpreadsheetApp.getUi();
+  try {
+    invalidateSodobaDynamicCache();
+    invalidateSodobaMasterMenuCache();
+    ui.alert(
+      "Làm mới Cache",
+      "🧹 ĐÃ LÀM MỚI CACHE THÀNH CÔNG!\n\nBộ nhớ đệm dữ liệu của Web App đã được xóa sạch. Lần mở Web App tiếp theo sẽ tải dữ liệu trực tiếp mới nhất từ Google Sheets!",
+      ui.ButtonSet.OK
+    );
+  } catch (err) {
+    ui.alert("Lỗi làm mới Cache", err.toString(), ui.ButtonSet.OK);
   }
 }

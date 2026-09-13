@@ -79,7 +79,7 @@ export const TableCard: React.FC<TableCardProps> = React.memo(({
         borderColor: isSelected ? '#d32f2f' : isSearchMatched ? '#f59e0b' : '#222222',
       }}
       className={`relative flex flex-col items-center justify-center border border-black shadow-[0_1px_2px_rgba(0,0,0,0.2)] select-none transition-all duration-150 ${
-        isVipRoom ? 'w-full h-12 py-1' : 'w-full h-9 sm:h-10'
+        isVipRoom ? 'w-full h-11 py-1' : 'w-full h-9'
       } ${
         isSelected
           ? 'table-selected-blink ring-2 ring-red-600 z-20 scale-105 font-black'
@@ -120,22 +120,28 @@ export const TableCard: React.FC<TableCardProps> = React.memo(({
       )}
 
       {/* Table Number */}
-      <span className="text-xs sm:text-sm font-black tracking-tight leading-none text-center">
+      <span className="text-xs font-black tracking-tight leading-none text-center">
         {table.name}
       </span>
 
-      {/* Capacity for VIP Rooms (10kh) */}
-      {isVipRoom && (
-        <span className="text-[10px] font-semibold opacity-90 leading-tight mt-0.5">
-          10kh
-        </span>
-      )}
-
-      {/* Booking Customer preview ONLY when table is occupied (not empty and not locked) */}
-      {status !== 'empty' && status !== 'inactive' && bookingCustomerName && !isVipRoom && !customBadge && (
-        <span className="text-[8px] font-bold px-0.5 truncate max-w-full leading-tight text-center">
-          {bookingCustomerName}
-        </span>
+      {/* Customer Name when table is occupied, or Capacity when empty for VIP Rooms */}
+      {isVipRoom ? (
+        status !== 'empty' && status !== 'inactive' && bookingCustomerName ? (
+          <span className="text-[8px] font-bold px-0.5 truncate max-w-full leading-tight text-center mt-0.5">
+            {bookingCustomerName}
+          </span>
+        ) : (
+          <span className="text-[10px] font-semibold opacity-90 leading-tight mt-0.5">
+            10kh
+          </span>
+        )
+      ) : (
+        /* Booking Customer preview for regular tables */
+        status !== 'empty' && status !== 'inactive' && bookingCustomerName && (
+          <span className="text-[8px] font-bold px-0.5 truncate max-w-full leading-tight text-center mt-0.5">
+            {bookingCustomerName}
+          </span>
+        )
       )}
     </button>
   );

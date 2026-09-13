@@ -134,10 +134,21 @@ export function parseDateComponents(rawDate: string | Date | undefined | null): 
     };
   }
 
-  const str = String(rawDate).trim();
+  let str = String(rawDate).trim();
   if (str.includes('T')) {
-    const datePart = str.split('T')[0];
-    return parseDateComponents(datePart);
+    str = str.split('T')[0].trim();
+  } else if (str.includes(' ')) {
+    str = str.split(' ')[0].trim();
+  }
+
+  // Hỗ trợ định dạng compact YYYYMMDD (ví dụ: 20260913)
+  const compactMatch = str.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compactMatch) {
+    return {
+      year: parseInt(compactMatch[1], 10),
+      month: parseInt(compactMatch[2], 10),
+      day: parseInt(compactMatch[3], 10),
+    };
   }
 
   const parts = str.split(/[/.-]/);
